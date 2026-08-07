@@ -1,0 +1,16 @@
+{
+  "name": "custom-skill-functions",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start",
+    "validate": "node --check src/functions/customSkillProcessor.js"
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.8.0"
+  }
+}
