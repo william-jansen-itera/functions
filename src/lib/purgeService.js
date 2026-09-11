@@ -151,10 +151,32 @@ async function getDeletedAttachmentItems(applicationIdentifier, { deletedBefore 
   return result.recordset;
 }
 
-async function deleteAttachmentArtifacts(attachments) {
-  const searchDocumentIds = attachments
+function buildNodeSearchDocumentIds(nodes, defaultTreeId = null) {
+  return nodes
+    .map((node) => {
+      const treeId = node?.treeId ?? defaultTreeId;
+      const nodeId = node?.nodeId ?? node?.id ?? null;
+
+      if (treeId == null || nodeId == null) {
+        return null;
+      }
+
+      return buildTreeNodeSearchDocumentId(String(treeId), String(nodeId));
+    })
+    .filter(Boolean);
+}
+
+function buildAttachmentSearchDocumentIds(attachments) {
+  return attachments
     .map((attachment) => buildAttachmentSearchDocumentId(attachment.blobUrl))
     .filter(Boolean);
+}
+
+async function deleteNodeAndAttachmentArtifacts({ nodes = [], attachments = [], defaultTreeId = null } = {}) {
+  const searchDocumentIds = [
+    ...buildNodeSearchDocumentIds(nodes, defaultTreeId),
+    ...buildAttachmentSearchDocumentIds(attachments),
+  ];
   const searchResult = await deleteSearchDocumentsById(searchDocumentIds);
 
   for (const attachment of attachments) {
@@ -167,22 +189,16 @@ async function deleteAttachmentArtifacts(attachments) {
   };
 }
 
+async function deleteAttachmentArtifacts(attachments) {
+  return deleteNodeAndAttachmentArtifacts({ attachments });
+}
+
 async function purgeDeletedTrees(applicationIdentifier, { deletedBefore = null } = {}) {
   const [nodes, attachments] = await Promise.all([
     getDeletedTreeNodeIds(applicationIdentifier, { deletedBefore }),
     getDeletedTreeAttachmentBlobs(applicationIdentifier, { deletedBefore }),
   ]);
-  const searchDocumentIds = [
-    ...nodes.map((node) => buildTreeNodeSearchDocumentId(node.treeId, node.nodeId)),
-    ...attachments
-      .map((attachment) => buildAttachmentSearchDocumentId(attachment.blobUrl))
-      .filter(Boolean),
-  ];
-  const searchResult = await deleteSearchDocumentsById(searchDocumentIds);
-
-  for (const attachment of attachments) {
-    await deleteNodeAttachmentBlobIfExists(attachment.blobName);
-  }
+  const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({ nodes, attachments });
 
   const request = addDeletedBeforeInput(
     new sql.Request().input('application_identifier', sql.NVarChar, applicationIdentifier),
@@ -199,8 +215,8 @@ async function purgeDeletedTrees(applicationIdentifier, { deletedBefore = null }
 
   return {
     purgedTreeCount: Array.isArray(result.rowsAffected) ? result.rowsAffected.reduce((sum, count) => sum + count, 0) : 0,
-    deletedBlobCount: attachments.length,
-    deletedSearchDocumentCount: searchResult.deletedDocumentCount,
+    deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
 
@@ -212,17 +228,7 @@ async function purgeDeletedNodes(
     getDeletedNodeIds(applicationIdentifier, { deletedBefore, includeDeletedTrees }),
     getDeletedNodeAttachmentBlobs(applicationIdentifier, { deletedBefore, includeDeletedTrees }),
   ]);
-  const searchDocumentIds = [
-    ...nodes.map((node) => buildTreeNodeSearchDocumentId(node.treeId, node.nodeId)),
-    ...attachments
-      .map((attachment) => buildAttachmentSearchDocumentId(attachment.blobUrl))
-      .filter(Boolean),
-  ];
-  const searchResult = await deleteSearchDocumentsById(searchDocumentIds);
-
-  for (const attachment of attachments) {
-    await deleteNodeAttachmentBlobIfExists(attachment.blobName);
-  }
+  const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({ nodes, attachments });
 
   const request = addDeletedBeforeInput(
     new sql.Request().input('application_identifier', sql.NVarChar, applicationIdentifier),
@@ -240,8 +246,8 @@ async function purgeDeletedNodes(
 
   return {
     purgedNodeCount: Array.isArray(result.rowsAffected) ? result.rowsAffected.reduce((sum, count) => sum + count, 0) : 0,
-    deletedBlobCount: attachments.length,
-    deletedSearchDocumentCount: searchResult.deletedDocumentCount,
+    deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
 
@@ -392,17 +398,11 @@ async function purgeNode(applicationIdentifier, treeId, nodeId) {
     throw new Error('Node must be exposed as deleted before it can be purged');
   }
 
-  const searchDocumentIds = [
-    ...nodes.recordset.map((node) => buildTreeNodeSearchDocumentId(treeId, node.nodeId)),
-    ...attachments.recordset
-      .map((attachment) => buildAttachmentSearchDocumentId(attachment.blobUrl))
-      .filter(Boolean),
-  ];
-  const searchResult = await deleteSearchDocumentsById(searchDocumentIds);
-
-  for (const attachment of attachments.recordset) {
-    await deleteNodeAttachmentBlobIfExists(attachment.blobName);
-  }
+  const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({
+    nodes: nodes.recordset,
+    attachments: attachments.recordset,
+    defaultTreeId: treeId,
+  });
 
   const purgeResult = await new sql.Request()
     .input('application_identifier', sql.NVarChar, applicationIdentifier)
@@ -440,8 +440,8 @@ async function purgeNode(applicationIdentifier, treeId, nodeId) {
     purgedNodeId: String(nodeId),
     treeId: String(treeId),
     purgedNodeCount: Array.isArray(purgeResult.rowsAffected) ? purgeResult.rowsAffected.reduce((sum, count) => sum + count, 0) : 0,
-    deletedBlobCount: attachments.recordset.length,
-    deletedSearchDocumentCount: searchResult.deletedDocumentCount,
+    deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
 
@@ -488,17 +488,11 @@ async function purgeTree(applicationIdentifier, treeId) {
           AND ti.id = @tree_instance_id;
       `),
   ]);
-  const searchDocumentIds = [
-    ...nodes.recordset.map((node) => buildTreeNodeSearchDocumentId(treeId, node.nodeId)),
-    ...attachments.recordset
-      .map((attachment) => buildAttachmentSearchDocumentId(attachment.blobUrl))
-      .filter(Boolean),
-  ];
-  const searchResult = await deleteSearchDocumentsById(searchDocumentIds);
-
-  for (const attachment of attachments.recordset) {
-    await deleteNodeAttachmentBlobIfExists(attachment.blobName);
-  }
+  const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({
+    nodes: nodes.recordset,
+    attachments: attachments.recordset,
+    defaultTreeId: treeId,
+  });
 
   const purgeResult = await new sql.Request()
     .input('application_identifier', sql.NVarChar, applicationIdentifier)
@@ -518,8 +512,8 @@ async function purgeTree(applicationIdentifier, treeId) {
 
   return {
     purgedTreeId: String(treeId),
-    deletedBlobCount: attachments.recordset.length,
-    deletedSearchDocumentCount: searchResult.deletedDocumentCount,
+    deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
 

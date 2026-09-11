@@ -23,6 +23,14 @@ The manual admin purge route exposed by the Function App is:
 
 `POST /api/purge`
 
+Supported manual purge actions are:
+
+- `purge-tree` for one soft-deleted tree
+- `purge-all-trees` for all soft-deleted trees in the current `APPLICATION_IDENTIFIER` scope
+- `purge-node` for one soft-deleted node subtree
+- `purge-all-nodes` for all soft-deleted nodes in the current `APPLICATION_IDENTIFIER` scope
+- `purge-attachment` for one soft-deleted attachment whose parent node and tree are still active
+
 ## Manual timer test
 
 If you want to manually invoke the timer-triggered scheduled purge from the Azure portal or the Azure Functions admin API, trigger `scheduledPurge` with an empty JSON object as the request body:
@@ -34,6 +42,44 @@ If you want to manually invoke the timer-triggered scheduled purge from the Azur
 Use the Function App master key for that manual timer invocation. A regular function key or host key is appropriate for the HTTP-triggered `POST /api/purge` function, but the timer-triggered `scheduledPurge` manual admin invocation uses the master key.
 
 When the invocation is accepted, the admin API typically returns `202 Accepted`. Confirm the actual purge outcome in the Function logs by checking for the `Starting scheduled purge...` and `Scheduled purge completed.` messages.
+
+## Application Insights queries
+
+When you need to verify whether a manual purge request reached the Function App, start with a request query in Application Insights Logs:
+
+```kusto
+requests
+| where url contains "/api/purge" or name == "purgeManager"
+| project timestamp, name, url, resultCode, success, duration, operation_Id
+| order by timestamp desc
+```
+
+To inspect the custom purge traces emitted by `purgeManager`, run:
+
+```kusto
+traces
+| where message contains "purgeManager request"
+| project timestamp, message, severityLevel, customDimensions
+| order by timestamp desc
+```
+
+If you already have a specific invocation ID and want the host-level request row plus the related trace entries together, use:
+
+```kusto
+let invocationId = "84537675-4a21-4714-8247-15dd1755deee";
+union requests, traces
+| where operation_Id == invocationId or customDimensions.InvocationId == invocationId
+| order by timestamp asc
+```
+
+For the timer-triggered `scheduledPurge`, the host lifecycle and the purge result are usually easiest to confirm with:
+
+```kusto
+traces
+| where message contains "Starting scheduled purge" or message contains "Scheduled purge completed."
+| project timestamp, message, severityLevel, customDimensions
+| order by timestamp desc
+```
 
 ## Azure AI Search contract
 
