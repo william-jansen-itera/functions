@@ -333,6 +333,118 @@ async function purgeAttachment(applicationIdentifier, treeId, attachmentId) {
   };
 }
 
+async function purgeNode(applicationIdentifier, treeId, nodeId) {
+  const [nodes, attachments] = await Promise.all([
+    new sql.Request()
+      .input('application_identifier', sql.NVarChar, applicationIdentifier)
+      .input('tree_instance_id', sql.Int, Number(treeId))
+      .input('id', sql.Int, Number(nodeId))
+      .query(`
+        WITH Descendants AS (
+          SELECT tn.id
+          FROM tree_nodes tn
+          INNER JOIN tree_instance ti ON ti.id = tn.tree_instance_id
+          INNER JOIN application_instance ai ON ai.id = ti.application_instance_id
+          WHERE tn.id = @id
+            AND tn.tree_instance_id = @tree_instance_id
+            AND (tn.deleted_at IS NOT NULL OR ti.deleted_at IS NOT NULL)
+            AND ai.app_identifier = @application_identifier
+
+          UNION ALL
+
+          SELECT child.id
+          FROM tree_nodes child
+          INNER JOIN Descendants parent_descendant ON child.parent_id = parent_descendant.id
+          WHERE child.tree_instance_id = @tree_instance_id
+        )
+        SELECT CAST(id AS VARCHAR(20)) AS nodeId
+        FROM Descendants;
+      `),
+    new sql.Request()
+      .input('application_identifier', sql.NVarChar, applicationIdentifier)
+      .input('tree_instance_id', sql.Int, Number(treeId))
+      .input('id', sql.Int, Number(nodeId))
+      .query(`
+        WITH Descendants AS (
+          SELECT tn.id
+          FROM tree_nodes tn
+          INNER JOIN tree_instance ti ON ti.id = tn.tree_instance_id
+          INNER JOIN application_instance ai ON ai.id = ti.application_instance_id
+          WHERE tn.id = @id
+            AND tn.tree_instance_id = @tree_instance_id
+            AND (tn.deleted_at IS NOT NULL OR ti.deleted_at IS NOT NULL)
+            AND ai.app_identifier = @application_identifier
+
+          UNION ALL
+
+          SELECT child.id
+          FROM tree_nodes child
+          INNER JOIN Descendants parent_descendant ON child.parent_id = parent_descendant.id
+          WHERE child.tree_instance_id = @tree_instance_id
+        )
+        SELECT files.blob_name AS blobName, files.blob_url AS blobUrl
+        FROM Descendants
+        INNER JOIN tree_node_detail_files files ON files.tree_node_id = Descendants.id;
+      `),
+  ]);
+
+  if (nodes.recordset.length === 0) {
+    throw new Error('Node must be exposed as deleted before it can be purged');
+  }
+
+  const searchDocumentIds = [
+    ...nodes.recordset.map((node) => buildTreeNodeSearchDocumentId(treeId, node.nodeId)),
+    ...attachments.recordset
+      .map((attachment) => buildAttachmentSearchDocumentId(attachment.blobUrl))
+      .filter(Boolean),
+  ];
+  const searchResult = await deleteSearchDocumentsById(searchDocumentIds);
+
+  for (const attachment of attachments.recordset) {
+    await deleteNodeAttachmentBlobIfExists(attachment.blobName);
+  }
+
+  const purgeResult = await new sql.Request()
+    .input('application_identifier', sql.NVarChar, applicationIdentifier)
+    .input('tree_instance_id', sql.Int, Number(treeId))
+    .input('id', sql.Int, Number(nodeId))
+    .query(`
+      WITH Descendants AS (
+        SELECT tn.id
+        FROM tree_nodes tn
+        INNER JOIN tree_instance ti ON ti.id = tn.tree_instance_id
+        INNER JOIN application_instance ai ON ai.id = ti.application_instance_id
+        WHERE tn.id = @id
+          AND tn.tree_instance_id = @tree_instance_id
+          AND (tn.deleted_at IS NOT NULL OR ti.deleted_at IS NOT NULL)
+          AND ai.app_identifier = @application_identifier
+
+        UNION ALL
+
+        SELECT child.id
+        FROM tree_nodes child
+        INNER JOIN Descendants parent_descendant ON child.parent_id = parent_descendant.id
+        WHERE child.tree_instance_id = @tree_instance_id
+      )
+      DELETE tree_nodes
+      FROM tree_nodes
+      INNER JOIN Descendants ON Descendants.id = tree_nodes.id
+      WHERE tree_nodes.tree_instance_id = @tree_instance_id;
+    `);
+
+  if (!purgeResult.rowsAffected.some((count) => count > 0)) {
+    throw new Error('Node must be exposed as deleted before it can be purged');
+  }
+
+  return {
+    purgedNodeId: String(nodeId),
+    treeId: String(treeId),
+    purgedNodeCount: Array.isArray(purgeResult.rowsAffected) ? purgeResult.rowsAffected.reduce((sum, count) => sum + count, 0) : 0,
+    deletedBlobCount: attachments.recordset.length,
+    deletedSearchDocumentCount: searchResult.deletedDocumentCount,
+  };
+}
+
 async function purgeTree(applicationIdentifier, treeId) {
   const treeResult = await new sql.Request()
     .input('application_identifier', sql.NVarChar, applicationIdentifier)
@@ -444,6 +556,7 @@ module.exports = {
   purgeDeletedAttachments,
   purgeDeletedNodes,
   purgeDeletedTrees,
+  purgeNode,
   purgeTree,
   runExpiredRetentionPurge,
 };

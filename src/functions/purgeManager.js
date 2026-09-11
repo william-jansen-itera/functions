@@ -4,6 +4,7 @@ const {
   purgeAttachment,
   purgeDeletedNodes,
   purgeDeletedTrees,
+  purgeNode,
   purgeTree,
 } = require('../lib/purgeService');
 
@@ -20,11 +21,13 @@ function buildJsonResponse(status, body) {
 function buildPurgeLogContext(payload) {
   const action = String(payload?.action ?? '').trim().toLowerCase();
   const treeId = Number(payload?.treeId);
+  const nodeId = Number(payload?.nodeId);
   const attachmentId = Number(payload?.attachmentId);
 
   return {
     action,
     treeId: Number.isFinite(treeId) ? treeId : null,
+    nodeId: Number.isFinite(nodeId) ? nodeId : null,
     attachmentId: Number.isFinite(attachmentId) ? attachmentId : null,
   };
 }
@@ -52,7 +55,7 @@ app.http('purgeManager', {
 
     context.log('purgeManager request started.', logContext);
 
-    if (!['purge-all-trees', 'purge-all-nodes', 'purge-attachment', 'purge-tree'].includes(action)) {
+    if (!['purge-all-trees', 'purge-all-nodes', 'purge-attachment', 'purge-node', 'purge-tree'].includes(action)) {
       context.log.warn('purgeManager rejected request with unsupported action.', logContext);
       return buildJsonResponse(400, { error: 'Invalid request, a supported action is required' });
     }
@@ -75,6 +78,17 @@ app.http('purgeManager', {
           }
 
           return purgeTree(applicationIdentifier, treeId);
+        }
+
+        if (action === 'purge-node') {
+          const treeId = Number(payload?.treeId);
+          const nodeId = Number(payload?.nodeId);
+
+          if (!Number.isFinite(treeId) || !Number.isFinite(nodeId)) {
+            throw new Error('Invalid request, treeId and nodeId are required');
+          }
+
+          return purgeNode(applicationIdentifier, treeId, nodeId);
         }
 
         const treeId = Number(payload?.treeId);
@@ -100,6 +114,7 @@ app.http('purgeManager', {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The request failed';
       const status = message.includes('treeId and attachmentId are required')
+        || message.includes('treeId and nodeId are required')
         || message === 'Invalid request, treeId is required'
         || message.includes('not found for purge')
         || message.includes('node is still deleted')
