@@ -23,6 +23,18 @@ The manual admin purge route exposed by the Function App is:
 
 `POST /api/purge`
 
+## Manual timer test
+
+If you want to manually invoke the timer-triggered scheduled purge from the Azure portal or the Azure Functions admin API, trigger `scheduledPurge` with an empty JSON object as the request body:
+
+```json
+{}
+```
+
+Use the Function App master key for that manual timer invocation. A regular function key or host key is appropriate for the HTTP-triggered `POST /api/purge` function, but the timer-triggered `scheduledPurge` manual admin invocation uses the master key.
+
+When the invocation is accepted, the admin API typically returns `202 Accepted`. Confirm the actual purge outcome in the Function logs by checking for the `Starting scheduled purge...` and `Scheduled purge completed.` messages.
+
 ## Azure AI Search contract
 
 The function expects the Azure AI Search custom skill payload shape. The generic input names are `textValues` and `confidenceValues`. The current image-caption pipeline can also continue sending `captionTexts` and `captionConfidences`.

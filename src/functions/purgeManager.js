@@ -17,23 +17,43 @@ function buildJsonResponse(status, body) {
   };
 }
 
+function buildPurgeLogContext(payload) {
+  const action = String(payload?.action ?? '').trim().toLowerCase();
+  const treeId = Number(payload?.treeId);
+  const attachmentId = Number(payload?.attachmentId);
+
+  return {
+    action,
+    treeId: Number.isFinite(treeId) ? treeId : null,
+    attachmentId: Number.isFinite(attachmentId) ? attachmentId : null,
+  };
+}
+
 app.http('purgeManager', {
   route: 'purge',
   methods: ['POST'],
   authLevel: 'function',
-  handler: async (request) => {
+  handler: async (request, context) => {
     let payload;
 
     try {
       payload = await request.json();
     } catch {
+      context.log.warn('purgeManager rejected request with invalid JSON body.');
       return buildJsonResponse(400, { error: 'Request body must be valid JSON.' });
     }
 
     const action = String(payload?.action ?? '').trim().toLowerCase();
     const applicationIdentifier = getRequiredApplicationIdentifier();
+    const logContext = {
+      applicationIdentifier,
+      ...buildPurgeLogContext(payload),
+    };
+
+    context.log('purgeManager request started.', logContext);
 
     if (!['purge-all-trees', 'purge-all-nodes', 'purge-attachment', 'purge-tree'].includes(action)) {
+      context.log.warn('purgeManager rejected request with unsupported action.', logContext);
       return buildJsonResponse(400, { error: 'Invalid request, a supported action is required' });
     }
 
@@ -67,6 +87,11 @@ app.http('purgeManager', {
         return purgeAttachment(applicationIdentifier, treeId, attachmentId);
       });
 
+      context.log('purgeManager request completed.', {
+        ...logContext,
+        result,
+      });
+
       return buildJsonResponse(200, {
         success: true,
         action,
@@ -81,6 +106,12 @@ app.http('purgeManager', {
         || message.includes('must be soft-deleted')
         ? 400
         : 500;
+
+      context.log.error('purgeManager request failed.', {
+        ...logContext,
+        status,
+        message,
+      });
 
       return buildJsonResponse(status, { error: message });
     }
