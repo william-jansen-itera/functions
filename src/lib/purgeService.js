@@ -178,13 +178,19 @@ async function deleteNodeAndAttachmentArtifacts({ nodes = [], attachments = [], 
     ...buildAttachmentSearchDocumentIds(attachments),
   ];
   const searchResult = await deleteSearchDocumentsById(searchDocumentIds);
+  let deletedBlobCount = 0;
 
   for (const attachment of attachments) {
-    await deleteNodeAttachmentBlobIfExists(attachment.blobName);
+    const deleted = await deleteNodeAttachmentBlobIfExists(attachment.blobName);
+
+    if (deleted) {
+      deletedBlobCount += 1;
+    }
   }
 
   return {
-    deletedBlobCount: attachments.length,
+    deletedBlobCount,
+    missingBlobCount: Math.max(attachments.length - deletedBlobCount, 0),
     deletedSearchDocumentCount: searchResult.deletedDocumentCount,
   };
 }
@@ -216,6 +222,7 @@ async function purgeDeletedTrees(applicationIdentifier, { deletedBefore = null }
   return {
     purgedTreeCount: Array.isArray(result.rowsAffected) ? result.rowsAffected.reduce((sum, count) => sum + count, 0) : 0,
     deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    missingBlobCount: deletedArtifacts.missingBlobCount,
     deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
@@ -247,6 +254,7 @@ async function purgeDeletedNodes(
   return {
     purgedNodeCount: Array.isArray(result.rowsAffected) ? result.rowsAffected.reduce((sum, count) => sum + count, 0) : 0,
     deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    missingBlobCount: deletedArtifacts.missingBlobCount,
     deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
@@ -273,6 +281,7 @@ async function purgeDeletedAttachments(applicationIdentifier, { deletedBefore = 
   return {
     purgedAttachmentCount: Array.isArray(result.rowsAffected) ? result.rowsAffected.reduce((sum, count) => sum + count, 0) : 0,
     deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    missingBlobCount: deletedArtifacts.missingBlobCount,
     deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
@@ -335,6 +344,7 @@ async function purgeAttachment(applicationIdentifier, treeId, attachmentId) {
     treeId: String(treeId),
     nodeId: String(attachment.nodeId),
     deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    missingBlobCount: deletedArtifacts.missingBlobCount,
     deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
@@ -441,6 +451,7 @@ async function purgeNode(applicationIdentifier, treeId, nodeId) {
     treeId: String(treeId),
     purgedNodeCount: Array.isArray(purgeResult.rowsAffected) ? purgeResult.rowsAffected.reduce((sum, count) => sum + count, 0) : 0,
     deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    missingBlobCount: deletedArtifacts.missingBlobCount,
     deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
@@ -513,6 +524,7 @@ async function purgeTree(applicationIdentifier, treeId) {
   return {
     purgedTreeId: String(treeId),
     deletedBlobCount: deletedArtifacts.deletedBlobCount,
+    missingBlobCount: deletedArtifacts.missingBlobCount,
     deletedSearchDocumentCount: deletedArtifacts.deletedSearchDocumentCount,
   };
 }
@@ -537,6 +549,7 @@ async function runExpiredRetentionPurge(applicationIdentifier, { now = new Date(
     purgedNodeCount: nodeResult.purgedNodeCount,
     purgedTreeCount: treeResult.purgedTreeCount,
     deletedBlobCount: attachmentResult.deletedBlobCount + nodeResult.deletedBlobCount + treeResult.deletedBlobCount,
+    missingBlobCount: attachmentResult.missingBlobCount + nodeResult.missingBlobCount + treeResult.missingBlobCount,
     deletedSearchDocumentCount: attachmentResult.deletedSearchDocumentCount
       + nodeResult.deletedSearchDocumentCount
       + treeResult.deletedSearchDocumentCount,

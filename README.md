@@ -31,6 +31,11 @@ Supported manual purge actions are:
 - `purge-all-nodes` for all soft-deleted nodes in the current `APPLICATION_IDENTIFIER` scope
 - `purge-attachment` for one soft-deleted attachment whose parent node and tree are still active
 
+Purge results distinguish between blobs actually deleted by the current run and blobs that were already missing from storage:
+
+- `deletedBlobCount` counts blobs for which the storage delete call succeeded in the current purge run
+- `missingBlobCount` counts blobs whose SQL attachment records were still eligible for purge but whose blobs were already absent, for example because storage soft-delete retention had already expired
+
 ## Manual timer test
 
 If you want to manually invoke the timer-triggered scheduled purge from the Azure portal or the Azure Functions admin API, trigger `scheduledPurge` with an empty JSON object as the request body:
