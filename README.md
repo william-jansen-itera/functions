@@ -33,8 +33,8 @@ Supported manual purge actions are:
 
 Purge results distinguish between blobs actually deleted by the current run and blobs that were already missing from storage:
 
-- `deletedBlobCount` counts blobs for which the storage delete call succeeded in the current purge run
-- `missingBlobCount` counts blobs whose SQL attachment records were still eligible for purge but whose blobs were already absent, for example because storage soft-delete retention had already expired
+- `softDeletedBlobCount` counts blobs for which the current purge run successfully issued the storage delete that moved the blob into storage soft-delete retention
+- `alreadySoftDeletedBlobCount` counts blobs whose SQL attachment records were still eligible for purge but whose blobs were already non-active in storage when purge ran, typically because they had already been soft-deleted earlier
 
 ## Manual timer test
 
