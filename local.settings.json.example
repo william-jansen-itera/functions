@@ -3,6 +3,18 @@
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "node",
-    "CUSTOM_SKILL_CONFIDENCE_THRESHOLD": "0.6"
+    "CUSTOM_SKILL_CONFIDENCE_THRESHOLD": "0.6",
+    "PURGE_JOB_SCHEDULE": "0 0 2 * * *",
+    "APPLICATION_IDENTIFIER": "your-application-identifier",
+    "AZURE_SQL_USER": "your-sql-user",
+    "AZURE_SQL_PASSWORD": "your-sql-password",
+    "AZURE_SQL_SERVER": "your-sql-server.database.windows.net",
+    "AZURE_SQL_DATABASE": "your-sql-database",
+    "AZURE_SQL_ENCRYPT": "true",
+    "AZURE_STORAGE_CONNECTION_STRING": "your-storage-connection-string",
+    "AZURE_STORAGE_CONTAINER_NAME": "your-container-name",
+    "AZURE_SEARCH_ENDPOINT": "https://your-search.search.windows.net",
+    "AZURE_SEARCH_INDEX_NAME": "your-search-index",
+    "AZURE_SEARCH_ADMIN_KEY": "your-search-admin-key"
   }
 }
