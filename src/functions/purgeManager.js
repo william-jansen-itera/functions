@@ -2,6 +2,7 @@ const { app } = require('@azure/functions');
 const { getRequiredApplicationIdentifier, withSqlConnection } = require('../lib/sql');
 const {
   purgeAttachment,
+  purgeDeletedAttachments,
   purgeDeletedNodes,
   purgeDeletedTrees,
   purgeNode,
@@ -55,7 +56,7 @@ app.http('purgeManager', {
 
     context.log('purgeManager request started.', logContext);
 
-    if (!['purge-all-trees', 'purge-all-nodes', 'purge-attachment', 'purge-node', 'purge-tree'].includes(action)) {
+    if (!['purge-all-trees', 'purge-all-nodes', 'purge-all-attachments', 'purge-attachment', 'purge-node', 'purge-tree'].includes(action)) {
       context.log.warn('purgeManager rejected request with unsupported action.', logContext);
       return buildJsonResponse(400, { error: 'Invalid request, a supported action is required' });
     }
@@ -68,6 +69,10 @@ app.http('purgeManager', {
 
         if (action === 'purge-all-nodes') {
           return purgeDeletedNodes(applicationIdentifier, { includeDeletedTrees: true });
+        }
+
+        if (action === 'purge-all-attachments') {
+          return purgeDeletedAttachments(applicationIdentifier);
         }
 
         if (action === 'purge-tree') {
