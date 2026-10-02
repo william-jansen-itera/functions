@@ -11,7 +11,7 @@ It also owns purge execution for the application: a timer-triggered purge job en
 2. Copy `local.settings.json.example` to `local.settings.json`.
 3. Set `CUSTOM_SKILL_CONFIDENCE_THRESHOLD` if you want a value other than `0.6`.
 4. Set the SQL, Blob Storage, Azure Search, and `APPLICATION_IDENTIFIER` values required by purge execution.
-5. Optionally adjust `PURGE_JOB_SCHEDULE` if you do not want the default daily `02:00 UTC` run.
+5. Optionally adjust `PURGE_JOB_SCHEDULE` if you do not want the default daily `16:00 UTC` run.
 6. Start the function locally:
    `npm start`
 
