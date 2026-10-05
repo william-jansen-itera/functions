@@ -2,6 +2,7 @@ const { app } = require('@azure/functions');
 const { getRequiredApplicationIdentifier } = require('../lib/sql');
 const {
   buildTreeNodeSecretName,
+  buildTreeNodeSecretNamePrefix,
   getSecretValue,
   setSecretValue,
 } = require('../lib/keyVault');
@@ -40,6 +41,18 @@ function buildSecretMetadata({ treeId, nodeId, secretMetadata = null, applicatio
   };
 }
 
+function assertSecretNameMatchesLeaf(secretName, { treeId, nodeId, applicationIdentifier }) {
+  const expectedPrefix = `${buildTreeNodeSecretNamePrefix({
+    applicationIdentifier,
+    treeId,
+    nodeId,
+  })}-`;
+
+  if (!String(secretName ?? '').startsWith(expectedPrefix)) {
+    throw new Error('Invalid request, secret metadata does not match the target leaf node');
+  }
+}
+
 function validateSetSecretPayload(payload) {
   if (!toTrimmedString(payload?.treeId) || !toTrimmedString(payload?.nodeId)) {
     throw new Error('Invalid request, treeId and nodeId are required for set-secret');
@@ -54,8 +67,8 @@ function validateGetSecretPayload(payload) {
   const secretName = toTrimmedString(payload?.secretMetadata?.secretName);
   const hasTreeNodeCoordinates = toTrimmedString(payload?.treeId) && toTrimmedString(payload?.nodeId);
 
-  if (!secretName && !hasTreeNodeCoordinates) {
-    throw new Error('Invalid request, secretMetadata.secretName or treeId and nodeId are required for get-secret');
+  if (!secretName || !hasTreeNodeCoordinates) {
+    throw new Error('Invalid request, treeId, nodeId, and secretMetadata.secretName are required for get-secret');
   }
 }
 
@@ -92,6 +105,11 @@ app.http('secretBroker', {
           secretMetadata: payload.secretMetadata,
           applicationIdentifier,
         });
+        assertSecretNameMatchesLeaf(secretMetadata.secretName, {
+          treeId: payload.treeId,
+          nodeId: payload.nodeId,
+          applicationIdentifier,
+        });
         const storedSecret = await setSecretValue({
           secretName: secretMetadata.secretName,
           secretValue: payload.secretValue,
@@ -114,6 +132,11 @@ app.http('secretBroker', {
         treeId: payload.treeId,
         nodeId: payload.nodeId,
         secretMetadata: payload.secretMetadata,
+        applicationIdentifier,
+      });
+      assertSecretNameMatchesLeaf(secretMetadata.secretName, {
+        treeId: payload.treeId,
+        nodeId: payload.nodeId,
         applicationIdentifier,
       });
       const secret = await getSecretValue(secretMetadata.secretName, secretMetadata.version);

@@ -1,3 +1,4 @@
+const { randomUUID } = require('crypto');
 const { DefaultAzureCredential } = require('@azure/identity');
 const { SecretClient } = require('@azure/keyvault-secrets');
 
@@ -40,12 +41,18 @@ function sanitizeSecretSegment(value, fallbackValue = 'secret') {
   return normalizedValue || fallbackValue;
 }
 
-function buildTreeNodeSecretName({ applicationIdentifier, treeId, nodeId }) {
+function buildTreeNodeSecretNamePrefix({ applicationIdentifier, treeId, nodeId }) {
   const applicationSegment = sanitizeSecretSegment(applicationIdentifier, 'app');
   const treeSegment = sanitizeSecretSegment(treeId, 'tree');
   const nodeSegment = sanitizeSecretSegment(nodeId, 'node');
 
   return `tree-${applicationSegment}-${treeSegment}-${nodeSegment}`;
+}
+
+function buildTreeNodeSecretName({ applicationIdentifier, treeId, nodeId, secretSuffix = null }) {
+  const suffix = sanitizeSecretSegment(secretSuffix ?? randomUUID().slice(0, 12), 'secret');
+
+  return `${buildTreeNodeSecretNamePrefix({ applicationIdentifier, treeId, nodeId })}-${suffix}`;
 }
 
 async function setSecretValue({ secretName, secretValue }) {
@@ -87,6 +94,7 @@ async function getSecretValue(secretName, version = undefined) {
 
 module.exports = {
   buildTreeNodeSecretName,
+  buildTreeNodeSecretNamePrefix,
   getRequiredKeyVaultUrl,
   getSecretClient,
   getSecretValue,
