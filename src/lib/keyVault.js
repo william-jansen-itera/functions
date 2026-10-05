@@ -123,6 +123,56 @@ async function deleteSecretValue(secretName) {
   }
 }
 
+async function restoreDeletedSecretValue(secretName) {
+  if (!String(secretName ?? '').trim()) {
+    throw new Error('A secret name is required');
+  }
+
+  const normalizedSecretName = String(secretName).trim();
+  const client = getSecretClient();
+
+  try {
+    const activeSecret = await client.getSecret(normalizedSecretName);
+
+    return {
+      restored: true,
+      provider: 'azure_key_vault',
+      secretName: activeSecret.name,
+      version: activeSecret.properties?.version ?? null,
+      vaultUrl: getRequiredKeyVaultUrl(),
+    };
+  } catch (error) {
+    if (error?.statusCode !== 404 && error?.code !== 'SecretNotFound') {
+      throw error;
+    }
+  }
+
+  try {
+    const poller = await client.beginRecoverDeletedSecret(normalizedSecretName);
+    const result = await poller.pollUntilDone();
+
+    return {
+      restored: true,
+      provider: 'azure_key_vault',
+      secretName: result.name,
+      version: result.properties?.version ?? null,
+      vaultUrl: getRequiredKeyVaultUrl(),
+    };
+  } catch (error) {
+    if (error?.statusCode === 404 || error?.code === 'SecretNotFound') {
+      return {
+        restored: false,
+        provider: 'azure_key_vault',
+        secretName: normalizedSecretName,
+        version: null,
+        vaultUrl: getRequiredKeyVaultUrl(),
+      };
+    }
+
+    throw error;
+  }
+}
+
 module.exports = {
   buildTreeNodeSecretName,
   buildTreeNodeSecretNamePrefix,
@@ -130,5 +180,6 @@ module.exports = {
   getRequiredKeyVaultUrl,
   getSecretClient,
   getSecretValue,
+  restoreDeletedSecretValue,
   setSecretValue,
 };

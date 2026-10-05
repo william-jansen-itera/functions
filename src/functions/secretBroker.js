@@ -5,6 +5,7 @@ const {
   buildTreeNodeSecretNamePrefix,
   deleteSecretValue,
   getSecretValue,
+  restoreDeletedSecretValue,
   setSecretValue,
 } = require('../lib/keyVault');
 
@@ -100,7 +101,7 @@ app.http('secretBroker', {
 
     const action = String(payload?.action ?? '').trim().toLowerCase();
 
-    if (action !== 'set-secret' && action !== 'get-secret' && action !== 'delete-secret') {
+    if (action !== 'set-secret' && action !== 'get-secret' && action !== 'delete-secret' && action !== 'restore-secret') {
       context.log.warn('secretBroker rejected request with unsupported action.', { action });
       return buildJsonResponse(400, { error: 'Invalid request, a supported action is required' });
     }
@@ -179,17 +180,38 @@ app.http('secretBroker', {
         nodeId: payload.nodeId,
         applicationIdentifier,
       });
-      const deletedSecret = await deleteSecretValue(secretMetadata.secretName);
+      if (action === 'delete-secret') {
+        const deletedSecret = await deleteSecretValue(secretMetadata.secretName);
+
+        return buildJsonResponse(200, {
+          success: true,
+          action,
+          secretMetadata: {
+            ...secretMetadata,
+            version: deletedSecret.version,
+            vaultUrl: deletedSecret.vaultUrl,
+          },
+          deleted: deletedSecret.deleted,
+        });
+      }
+
+      const restoredSecret = await restoreDeletedSecretValue(secretMetadata.secretName);
+
+      if (!restoredSecret.restored) {
+        return buildJsonResponse(404, {
+          error: 'The deleted secret could not be restored',
+        });
+      }
 
       return buildJsonResponse(200, {
         success: true,
         action,
         secretMetadata: {
           ...secretMetadata,
-          version: deletedSecret.version,
-          vaultUrl: deletedSecret.vaultUrl,
+          version: restoredSecret.version,
+          vaultUrl: restoredSecret.vaultUrl,
         },
-        deleted: deletedSecret.deleted,
+        restored: true,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The request failed';

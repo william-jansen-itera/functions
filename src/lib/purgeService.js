@@ -1,5 +1,6 @@
 const { sql } = require('./sql');
 const { deleteNodeAttachmentBlobIfExists } = require('./blobStorage');
+const { deleteSecretValue } = require('./keyVault');
 const {
   buildAttachmentSearchDocumentId,
   buildTreeNodeSearchDocumentId,
@@ -43,6 +44,33 @@ function buildDeletedAttachmentCondition({ deletedBefore = null } = {}) {
   return deletedBefore
     ? 'files.deleted_at IS NOT NULL AND files.deleted_at < @deleted_before AND tn.deleted_at IS NULL AND ti.deleted_at IS NULL'
     : 'files.deleted_at IS NOT NULL AND tn.deleted_at IS NULL AND ti.deleted_at IS NULL';
+}
+
+function normalizeSecretMetadata(value) {
+  const candidate = typeof value === 'string'
+    ? (() => {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return null;
+      }
+    })()
+    : value;
+
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return null;
+  }
+
+  const secretName = String(candidate.secretName ?? '').trim();
+
+  if (!secretName) {
+    return null;
+  }
+
+  return {
+    secretName,
+    version: String(candidate.version ?? '').trim() || null,
+  };
 }
 
 async function getDeletedTreeAttachmentBlobs(applicationIdentifier, { deletedBefore = null } = {}) {
@@ -127,6 +155,52 @@ async function getDeletedNodeIds(applicationIdentifier, { deletedBefore = null, 
   return result.recordset;
 }
 
+async function getDeletedTreeSecrets(applicationIdentifier, { deletedBefore = null } = {}) {
+  const treeCondition = buildDeletedTreeCondition({ deletedBefore });
+  const request = addDeletedBeforeInput(
+    new sql.Request().input('application_identifier', sql.NVarChar, applicationIdentifier),
+    deletedBefore,
+  );
+  const result = await request.query(`
+      SELECT tnd.secret_metadata AS secretMetadata
+      FROM tree_node_details tnd
+      INNER JOIN tree_nodes tn ON tn.id = tnd.tree_node_id
+      INNER JOIN tree_instance ti ON ti.id = tn.tree_instance_id
+      INNER JOIN application_instance ai ON ai.id = ti.application_instance_id
+      WHERE ai.app_identifier = @application_identifier
+        AND ${treeCondition}
+        AND CAST(COALESCE(tnd.is_secret, 0) AS BIT) = 1
+        AND tnd.secret_metadata IS NOT NULL;
+    `);
+
+  return result.recordset
+    .map((record) => normalizeSecretMetadata(record.secretMetadata))
+    .filter(Boolean);
+}
+
+async function getDeletedNodeSecrets(applicationIdentifier, { deletedBefore = null, includeDeletedTrees = true } = {}) {
+  const nodeCondition = buildDeletedNodeCondition({ deletedBefore, includeDeletedTrees });
+  const request = addDeletedBeforeInput(
+    new sql.Request().input('application_identifier', sql.NVarChar, applicationIdentifier),
+    deletedBefore,
+  );
+  const result = await request.query(`
+      SELECT tnd.secret_metadata AS secretMetadata
+      FROM tree_node_details tnd
+      INNER JOIN tree_nodes tn ON tn.id = tnd.tree_node_id
+      INNER JOIN tree_instance ti ON ti.id = tn.tree_instance_id
+      INNER JOIN application_instance ai ON ai.id = ti.application_instance_id
+      WHERE ai.app_identifier = @application_identifier
+        AND ${nodeCondition}
+        AND CAST(COALESCE(tnd.is_secret, 0) AS BIT) = 1
+        AND tnd.secret_metadata IS NOT NULL;
+    `);
+
+  return result.recordset
+    .map((record) => normalizeSecretMetadata(record.secretMetadata))
+    .filter(Boolean);
+}
+
 async function getDeletedAttachmentItems(applicationIdentifier, { deletedBefore = null } = {}) {
   const attachmentCondition = buildDeletedAttachmentCondition({ deletedBefore });
   const request = addDeletedBeforeInput(
@@ -172,7 +246,7 @@ function buildAttachmentSearchDocumentIds(attachments) {
     .filter(Boolean);
 }
 
-async function deleteNodeAndAttachmentArtifacts({ nodes = [], attachments = [], defaultTreeId = null } = {}) {
+async function deleteNodeAndAttachmentArtifacts({ nodes = [], attachments = [], secrets = [], defaultTreeId = null } = {}) {
   const searchDocumentIds = [
     ...buildNodeSearchDocumentIds(nodes, defaultTreeId),
     ...buildAttachmentSearchDocumentIds(attachments),
@@ -188,6 +262,10 @@ async function deleteNodeAndAttachmentArtifacts({ nodes = [], attachments = [], 
     }
   }
 
+  for (const secret of secrets) {
+    await deleteSecretValue(secret.secretName);
+  }
+
   return {
     softDeletedBlobCount,
     alreadySoftDeletedBlobCount: Math.max(attachments.length - softDeletedBlobCount, 0),
@@ -200,11 +278,12 @@ async function deleteAttachmentArtifacts(attachments) {
 }
 
 async function purgeDeletedTrees(applicationIdentifier, { deletedBefore = null } = {}) {
-  const [nodes, attachments] = await Promise.all([
+  const [nodes, attachments, secrets] = await Promise.all([
     getDeletedTreeNodeIds(applicationIdentifier, { deletedBefore }),
     getDeletedTreeAttachmentBlobs(applicationIdentifier, { deletedBefore }),
+    getDeletedTreeSecrets(applicationIdentifier, { deletedBefore }),
   ]);
-  const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({ nodes, attachments });
+  const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({ nodes, attachments, secrets });
 
   const request = addDeletedBeforeInput(
     new sql.Request().input('application_identifier', sql.NVarChar, applicationIdentifier),
@@ -231,11 +310,12 @@ async function purgeDeletedNodes(
   applicationIdentifier,
   { deletedBefore = null, includeDeletedTrees = true } = {},
 ) {
-  const [nodes, attachments] = await Promise.all([
+  const [nodes, attachments, secrets] = await Promise.all([
     getDeletedNodeIds(applicationIdentifier, { deletedBefore, includeDeletedTrees }),
     getDeletedNodeAttachmentBlobs(applicationIdentifier, { deletedBefore, includeDeletedTrees }),
+    getDeletedNodeSecrets(applicationIdentifier, { deletedBefore, includeDeletedTrees }),
   ]);
-  const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({ nodes, attachments });
+  const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({ nodes, attachments, secrets });
 
   const request = addDeletedBeforeInput(
     new sql.Request().input('application_identifier', sql.NVarChar, applicationIdentifier),
@@ -350,7 +430,7 @@ async function purgeAttachment(applicationIdentifier, treeId, attachmentId) {
 }
 
 async function purgeNode(applicationIdentifier, treeId, nodeId) {
-  const [nodes, attachments] = await Promise.all([
+  const [nodes, attachments, secrets] = await Promise.all([
     new sql.Request()
       .input('application_identifier', sql.NVarChar, applicationIdentifier)
       .input('tree_instance_id', sql.Int, Number(treeId))
@@ -402,6 +482,34 @@ async function purgeNode(applicationIdentifier, treeId, nodeId) {
         FROM Descendants
         INNER JOIN tree_node_detail_files files ON files.tree_node_id = Descendants.id;
       `),
+    new sql.Request()
+      .input('application_identifier', sql.NVarChar, applicationIdentifier)
+      .input('tree_instance_id', sql.Int, Number(treeId))
+      .input('id', sql.Int, Number(nodeId))
+      .query(`
+        WITH Descendants AS (
+          SELECT tn.id
+          FROM tree_nodes tn
+          INNER JOIN tree_instance ti ON ti.id = tn.tree_instance_id
+          INNER JOIN application_instance ai ON ai.id = ti.application_instance_id
+          WHERE tn.id = @id
+            AND tn.tree_instance_id = @tree_instance_id
+            AND (tn.deleted_at IS NOT NULL OR ti.deleted_at IS NOT NULL)
+            AND ai.app_identifier = @application_identifier
+
+          UNION ALL
+
+          SELECT child.id
+          FROM tree_nodes child
+          INNER JOIN Descendants parent_descendant ON child.parent_id = parent_descendant.id
+          WHERE child.tree_instance_id = @tree_instance_id
+        )
+        SELECT tnd.secret_metadata AS secretMetadata
+        FROM Descendants
+        INNER JOIN tree_node_details tnd ON tnd.tree_node_id = Descendants.id
+        WHERE CAST(COALESCE(tnd.is_secret, 0) AS BIT) = 1
+          AND tnd.secret_metadata IS NOT NULL;
+      `),
   ]);
 
   if (nodes.recordset.length === 0) {
@@ -411,6 +519,9 @@ async function purgeNode(applicationIdentifier, treeId, nodeId) {
   const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({
     nodes: nodes.recordset,
     attachments: attachments.recordset,
+    secrets: secrets.recordset
+      .map((record) => normalizeSecretMetadata(record.secretMetadata))
+      .filter(Boolean),
     defaultTreeId: treeId,
   });
 
@@ -474,7 +585,7 @@ async function purgeTree(applicationIdentifier, treeId) {
     throw new Error('Tree must be soft-deleted before it can be purged');
   }
 
-  const [nodes, attachments] = await Promise.all([
+  const [nodes, attachments, secrets] = await Promise.all([
     new sql.Request()
       .input('application_identifier', sql.NVarChar, applicationIdentifier)
       .input('tree_instance_id', sql.Int, Number(treeId))
@@ -498,10 +609,27 @@ async function purgeTree(applicationIdentifier, treeId) {
         WHERE ai.app_identifier = @application_identifier
           AND ti.id = @tree_instance_id;
       `),
+    new sql.Request()
+      .input('application_identifier', sql.NVarChar, applicationIdentifier)
+      .input('tree_instance_id', sql.Int, Number(treeId))
+      .query(`
+        SELECT tnd.secret_metadata AS secretMetadata
+        FROM tree_node_details tnd
+        INNER JOIN tree_nodes tn ON tn.id = tnd.tree_node_id
+        INNER JOIN tree_instance ti ON ti.id = tn.tree_instance_id
+        INNER JOIN application_instance ai ON ai.id = ti.application_instance_id
+        WHERE ai.app_identifier = @application_identifier
+          AND ti.id = @tree_instance_id
+          AND CAST(COALESCE(tnd.is_secret, 0) AS BIT) = 1
+          AND tnd.secret_metadata IS NOT NULL;
+      `),
   ]);
   const deletedArtifacts = await deleteNodeAndAttachmentArtifacts({
     nodes: nodes.recordset,
     attachments: attachments.recordset,
+    secrets: secrets.recordset
+      .map((record) => normalizeSecretMetadata(record.secretMetadata))
+      .filter(Boolean),
     defaultTreeId: treeId,
   });
 
