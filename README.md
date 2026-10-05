@@ -160,5 +160,6 @@ For purge execution, also configure these app settings in the Function App:
 - `AZURE_SEARCH_INDEX_NAME`
 - `AZURE_SEARCH_ADMIN_KEY`
 - `AZURE_KEY_VAULT_URL`
+- `AZURE_KEY_VAULT_MANAGED_IDENTITY_CLIENT_ID` only when you intentionally want to use a user-assigned managed identity for Key Vault access
 
-For the secret broker, the Function App identity or configured Azure credential must be allowed to `set` and `get` secrets in that Key Vault.
+For the secret broker, the Function App identity or configured Azure credential must be allowed to `set` and `get` secrets in that Key Vault. If the Function App uses a system-assigned managed identity, leave `AZURE_KEY_VAULT_MANAGED_IDENTITY_CLIENT_ID` unset so `DefaultAzureCredential` can use the system-assigned identity directly.

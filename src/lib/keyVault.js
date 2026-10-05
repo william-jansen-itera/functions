@@ -2,7 +2,7 @@ const { DefaultAzureCredential } = require('@azure/identity');
 const { SecretClient } = require('@azure/keyvault-secrets');
 
 const keyVaultUrl = String(process.env.AZURE_KEY_VAULT_URL ?? '').trim();
-const managedIdentityClientId = String(process.env.AZURE_CLIENT_ID ?? '').trim() || undefined;
+const managedIdentityClientId = String(process.env.AZURE_KEY_VAULT_MANAGED_IDENTITY_CLIENT_ID ?? '').trim() || undefined;
 
 let secretClient;
 
@@ -15,9 +15,9 @@ function getRequiredKeyVaultUrl() {
 }
 
 function getCredential() {
-  return new DefaultAzureCredential({
-    managedIdentityClientId,
-  });
+  return managedIdentityClientId
+    ? new DefaultAzureCredential({ managedIdentityClientId })
+    : new DefaultAzureCredential();
 }
 
 function getSecretClient() {

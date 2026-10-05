@@ -16,6 +16,7 @@
     "AZURE_SEARCH_ENDPOINT": "https://your-search.search.windows.net",
     "AZURE_SEARCH_INDEX_NAME": "your-search-index",
     "AZURE_SEARCH_ADMIN_KEY": "your-search-admin-key",
-    "AZURE_KEY_VAULT_URL": "https://your-key-vault.vault.azure.net/"
+    "AZURE_KEY_VAULT_URL": "https://your-key-vault.vault.azure.net/",
+    "AZURE_KEY_VAULT_MANAGED_IDENTITY_CLIENT_ID": "optional-user-assigned-managed-identity-client-id"
   }
 }
