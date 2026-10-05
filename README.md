@@ -2,7 +2,7 @@
 
 This project hosts a reusable Azure AI Search Web API skill used to qualify confidence-scored text before it becomes searchable.
 
-It also owns purge execution for the application: a timer-triggered purge job enforces the fixed 7-day soft-delete retention window, and an HTTP-triggered purge function handles manual admin purge requests proxied through the frontend.
+It also owns sensitive backend operations for the application: a timer-triggered purge job enforces the fixed 7-day soft-delete retention window, an HTTP-triggered purge function handles manual admin purge requests proxied through the frontend, and a function-key protected secret broker stores and retrieves tree secrets through Azure Key Vault.
 
 ## Local setup
 
@@ -10,7 +10,7 @@ It also owns purge execution for the application: a timer-triggered purge job en
    `npm ci`
 2. Copy `local.settings.json.example` to `local.settings.json`.
 3. Set `CUSTOM_SKILL_CONFIDENCE_THRESHOLD` if you want a value other than `0.6`.
-4. Set the SQL, Blob Storage, Azure Search, and `APPLICATION_IDENTIFIER` values required by purge execution.
+4. Set the SQL, Blob Storage, Azure Search, Key Vault, and `APPLICATION_IDENTIFIER` values required by purge execution and secret brokering.
 5. Optionally adjust `PURGE_JOB_SCHEDULE` if you do not want the default daily `16:00 UTC` run.
 6. Start the function locally:
    `npm start`
@@ -23,6 +23,10 @@ The manual admin purge route exposed by the Function App is:
 
 `POST /api/purge`
 
+The tree secret broker route exposed by the Function App is:
+
+`POST /api/tree-secrets`
+
 Supported manual purge actions are:
 
 - `purge-tree` for one soft-deleted tree
@@ -30,6 +34,11 @@ Supported manual purge actions are:
 - `purge-node` for one soft-deleted node subtree
 - `purge-all-nodes` for all soft-deleted nodes in the current `APPLICATION_IDENTIFIER` scope
 - `purge-attachment` for one soft-deleted attachment whose parent node and tree are still active
+
+Supported secret broker actions are:
+
+- `set-secret` to write or rotate a tree leaf secret in Azure Key Vault
+- `get-secret` to retrieve an existing tree leaf secret after the frontend has already authorized the user
 
 Purge results distinguish between blobs actually deleted by the current run and blobs that were already missing from storage:
 
@@ -150,3 +159,6 @@ For purge execution, also configure these app settings in the Function App:
 - `AZURE_SEARCH_ENDPOINT`
 - `AZURE_SEARCH_INDEX_NAME`
 - `AZURE_SEARCH_ADMIN_KEY`
+- `AZURE_KEY_VAULT_URL`
+
+For the secret broker, the Function App identity or configured Azure credential must be allowed to `set` and `get` secrets in that Key Vault.

@@ -5,7 +5,7 @@
   "main": "src/functions/*.js",
   "scripts": {
     "start": "func start",
-    "validate": "node --check src/functions/customSkillProcessor.js && node --check src/functions/purgeManager.js && node --check src/functions/scheduledPurge.js && node --check src/lib/sql.js && node --check src/lib/blobStorage.js && node --check src/lib/azureSearch.js && node --check src/lib/purgeService.js"
+    "validate": "node --check src/functions/customSkillProcessor.js && node --check src/functions/purgeManager.js && node --check src/functions/scheduledPurge.js && node --check src/functions/secretBroker.js && node --check src/lib/sql.js && node --check src/lib/blobStorage.js && node --check src/lib/azureSearch.js && node --check src/lib/purgeService.js && node --check src/lib/keyVault.js"
   },
   "engines": {
     "node": "20.x"
@@ -13,6 +13,7 @@
   "dependencies": {
     "@azure/functions": "^4.8.0",
     "@azure/identity": "^4.13.0",
+    "@azure/keyvault-secrets": "^4.10.0",
     "@azure/storage-blob": "^12.29.1",
     "mssql": "^12.7.0"
   }
