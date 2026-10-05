@@ -92,9 +92,41 @@ async function getSecretValue(secretName, version = undefined) {
   };
 }
 
+async function deleteSecretValue(secretName) {
+  if (!String(secretName ?? '').trim()) {
+    throw new Error('A secret name is required');
+  }
+
+  try {
+    const poller = await getSecretClient().beginDeleteSecret(String(secretName).trim());
+    const result = await poller.pollUntilDone();
+
+    return {
+      deleted: true,
+      provider: 'azure_key_vault',
+      secretName: result.name,
+      version: result.properties?.version ?? null,
+      vaultUrl: getRequiredKeyVaultUrl(),
+    };
+  } catch (error) {
+    if (error?.statusCode === 404 || error?.code === 'SecretNotFound') {
+      return {
+        deleted: false,
+        provider: 'azure_key_vault',
+        secretName: String(secretName).trim(),
+        version: null,
+        vaultUrl: getRequiredKeyVaultUrl(),
+      };
+    }
+
+    throw error;
+  }
+}
+
 module.exports = {
   buildTreeNodeSecretName,
   buildTreeNodeSecretNamePrefix,
+  deleteSecretValue,
   getRequiredKeyVaultUrl,
   getSecretClient,
   getSecretValue,

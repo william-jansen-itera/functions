@@ -3,9 +3,12 @@ const { getRequiredApplicationIdentifier } = require('../lib/sql');
 const {
   buildTreeNodeSecretName,
   buildTreeNodeSecretNamePrefix,
+  deleteSecretValue,
   getSecretValue,
   setSecretValue,
 } = require('../lib/keyVault');
+
+const DEFAULT_SECRET_DISPLAY_LABEL = 'Stored Key Vault secret';
 
 function buildJsonResponse(status, body) {
   return {
@@ -37,7 +40,7 @@ function buildSecretMetadata({ treeId, nodeId, secretMetadata = null, applicatio
     secretName,
     version: toTrimmedString(secretMetadata?.version),
     vaultUrl: toTrimmedString(secretMetadata?.vaultUrl),
-    displayLabel: toTrimmedString(secretMetadata?.displayLabel) || secretName,
+    displayLabel: toTrimmedString(secretMetadata?.displayLabel) || DEFAULT_SECRET_DISPLAY_LABEL,
   };
 }
 
@@ -72,6 +75,15 @@ function validateGetSecretPayload(payload) {
   }
 }
 
+function validateDeleteSecretPayload(payload) {
+  const secretName = toTrimmedString(payload?.secretMetadata?.secretName);
+  const hasTreeNodeCoordinates = toTrimmedString(payload?.treeId) && toTrimmedString(payload?.nodeId);
+
+  if (!secretName || !hasTreeNodeCoordinates) {
+    throw new Error('Invalid request, treeId, nodeId, and secretMetadata.secretName are required for delete-secret');
+  }
+}
+
 app.http('secretBroker', {
   route: 'tree-secrets',
   methods: ['POST'],
@@ -88,7 +100,7 @@ app.http('secretBroker', {
 
     const action = String(payload?.action ?? '').trim().toLowerCase();
 
-    if (action !== 'set-secret' && action !== 'get-secret') {
+    if (action !== 'set-secret' && action !== 'get-secret' && action !== 'delete-secret') {
       context.log.warn('secretBroker rejected request with unsupported action.', { action });
       return buildJsonResponse(400, { error: 'Invalid request, a supported action is required' });
     }
@@ -126,7 +138,35 @@ app.http('secretBroker', {
         });
       }
 
-      validateGetSecretPayload(payload);
+      if (action === 'get-secret') {
+        validateGetSecretPayload(payload);
+
+        const secretMetadata = buildSecretMetadata({
+          treeId: payload.treeId,
+          nodeId: payload.nodeId,
+          secretMetadata: payload.secretMetadata,
+          applicationIdentifier,
+        });
+        assertSecretNameMatchesLeaf(secretMetadata.secretName, {
+          treeId: payload.treeId,
+          nodeId: payload.nodeId,
+          applicationIdentifier,
+        });
+        const secret = await getSecretValue(secretMetadata.secretName, secretMetadata.version);
+
+        return buildJsonResponse(200, {
+          success: true,
+          action,
+          secretMetadata: {
+            ...secretMetadata,
+            version: secret.version,
+            vaultUrl: secret.vaultUrl,
+          },
+          secretValue: secret.value,
+        });
+      }
+
+      validateDeleteSecretPayload(payload);
 
       const secretMetadata = buildSecretMetadata({
         treeId: payload.treeId,
@@ -139,17 +179,17 @@ app.http('secretBroker', {
         nodeId: payload.nodeId,
         applicationIdentifier,
       });
-      const secret = await getSecretValue(secretMetadata.secretName, secretMetadata.version);
+      const deletedSecret = await deleteSecretValue(secretMetadata.secretName);
 
       return buildJsonResponse(200, {
         success: true,
         action,
         secretMetadata: {
           ...secretMetadata,
-          version: secret.version,
-          vaultUrl: secret.vaultUrl,
+          version: deletedSecret.version,
+          vaultUrl: deletedSecret.vaultUrl,
         },
-        secretValue: secret.value,
+        deleted: deletedSecret.deleted,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The request failed';
