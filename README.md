@@ -4,6 +4,12 @@ This project hosts a reusable Azure AI Search Web API skill used to qualify conf
 
 It also owns sensitive backend operations for the application: a timer-triggered purge job enforces the fixed 7-day soft-delete retention window, an HTTP-triggered purge function handles manual admin purge requests proxied through the frontend, and a function-key protected secret broker stores and retrieves tree secrets through Azure Key Vault.
 
+## Tree Populate worker
+
+The `tree-populate-jobs` Storage Queue trigger processes full-tree Populate jobs after the frontend returns a job ID. It uses the Function App's `AzureWebJobsStorage`; this must point to the same storage account as the frontend's `AZURE_STORAGE_CONNECTION_STRING`. The Function App may also need `AZURE_STORAGE_CONNECTION_STRING` (or `AZURE_STORAGE_ACCOUNT_URL`) for its separate Blob Storage operations. For local queue testing with Azurite, use `UseDevelopmentStorage=true` for `AzureWebJobsStorage` and the frontend's `AZURE_STORAGE_CONNECTION_STRING` (and start Azurite); setting the Function App's Blob connection to Azurite also sends its Blob operations to the emulator. The Function also needs the same SQL connection and `APPLICATION_IDENTIFIER` as the frontend, `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_MODEL_DEPLOYMENT_NAME`, and an identity authorized to invoke the Foundry model. Queue messages contain only the job ID; the description and status live in SQL.
+
+Apply the forward-only `frontend/azure-sql/tree-jobs.sql` migration before deploying the worker, then deploy/configure the Function App before enabling the updated frontend. Do not run that migration automatically against production. The Consumption plan's `functionTimeout` is configured to 10 minutes; measure worst-case generation time before rollout. Jobs that cannot finish within that limit require a checkpointed design. The recovery timer fails abandoned Populate jobs; retain job history only as long as needed for support and remove expired completed/failed records through the established retention process.
+
 ## Local setup
 
 1. Install dependencies:

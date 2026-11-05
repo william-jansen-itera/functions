@@ -11,6 +11,8 @@
     "AZURE_SQL_SERVER": "your-sql-server.database.windows.net",
     "AZURE_SQL_DATABASE": "your-sql-database",
     "AZURE_SQL_ENCRYPT": "true",
+    "AZURE_AI_PROJECT_ENDPOINT": "https://your-foundry-project-endpoint",
+    "AZURE_AI_MODEL_DEPLOYMENT_NAME": "your-model-deployment",
     "AZURE_STORAGE_CONNECTION_STRING": "your-storage-connection-string",
     "AZURE_STORAGE_CONTAINER_NAME": "your-container-name",
     "AZURE_SEARCH_ENDPOINT": "https://your-search.search.windows.net",

@@ -5,12 +5,13 @@
   "main": "src/functions/*.js",
   "scripts": {
     "start": "func start",
-    "validate": "node --check src/functions/customSkillProcessor.js && node --check src/functions/purgeManager.js && node --check src/functions/scheduledPurge.js && node --check src/functions/secretBroker.js && node --check src/lib/sql.js && node --check src/lib/blobStorage.js && node --check src/lib/azureSearch.js && node --check src/lib/purgeService.js && node --check src/lib/keyVault.js"
+    "validate": "node --check src/functions/customSkillProcessor.js && node --check src/functions/purgeManager.js && node --check src/functions/scheduledPurge.js && node --check src/functions/secretBroker.js && node --check src/functions/treePopulateWorker.js && node --check src/lib/sql.js && node --check src/lib/blobStorage.js && node --check src/lib/azureSearch.js && node --check src/lib/purgeService.js && node --check src/lib/keyVault.js && node --check src/lib/treePopulateGeneration.js && node --check src/lib/treePopulateJob.js"
   },
   "engines": {
     "node": "20.x"
   },
   "dependencies": {
+    "@azure/ai-projects": "2.0.0-beta.5",
     "@azure/functions": "^4.8.0",
     "@azure/identity": "^4.13.0",
     "@azure/keyvault-secrets": "^4.10.0",
