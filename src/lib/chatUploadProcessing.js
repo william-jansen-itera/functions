@@ -47,6 +47,8 @@ async function generateTemporaryNote({ fileName, text, partial }) {
         role: 'system',
         content: [
           'Write a factual placement note for a knowledge tree from the supplied file text.',
+          'The note will help organize and place the extracted information accurately within the knowledge tree.',
+          'It should be written as a factual placement note for a knowledge tree from the supplied file text.',
           'For short, coherent text, preserve its content, language, wording, and distinctive details with only light cleanup; do not replace it with a generic subject-and-topics summary.',
           'Extracted text may instead be fragmented OCR from a chart or image: turn it into a readable note using the recognizable subject, labels, and figures, without copying OCR noise or guessing which figures belong to which labels.',
           'If a relationship is unclear, say so rather than asserting it.',
