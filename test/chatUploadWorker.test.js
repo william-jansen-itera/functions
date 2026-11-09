@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 let handler;
+let queueConnection;
 let claimedUpload;
 let extractionError;
 const calls = [];
@@ -25,12 +26,16 @@ require.cache[processingPath] = { id: processingPath, filename: processingPath, 
   stopIndexingAndDeleteDocument: async () => { calls.push('deleteSearch'); },
 } };
 require.cache[functionsPath] = { id: functionsPath, filename: functionsPath, loaded: true, exports: {
-  app: { storageQueue: (_name, config) => { handler = config.handler; } },
+  app: { storageQueue: (_name, config) => { handler = config.handler; queueConnection = config.connection; } },
 } };
 require('../src/functions/processUploadWorker');
 
 const uploadId = 'c125d350-4cae-4ad4-a69c-419324125e00';
 const context = { log() {}, error() {}, triggerMetadata: { dequeueCount: 1 } };
+
+test('listens on the separate chat upload storage account', () => {
+  assert.equal(queueConnection, 'CHAT_UPLOAD_STORAGE_CONNECTION_STRING');
+});
 
 test.beforeEach(() => {
   calls.length = 0;

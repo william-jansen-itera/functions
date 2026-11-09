@@ -4,6 +4,7 @@ const { waitForIndexedUpload, generateTemporaryNote, stopIndexingAndDeleteDocume
 
 app.storageQueue('processUploadWorker', {
   queueName: 'chat-upload-jobs',
+  connection: 'CHAT_UPLOAD_STORAGE_CONNECTION_STRING',
   handler: async (message, context) => {
     const uploadId = String(message?.uploadId ?? '').trim();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {

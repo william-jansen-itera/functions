@@ -15,6 +15,7 @@
     "AZURE_AI_MODEL_DEPLOYMENT_NAME": "your-model-deployment",
     "AZURE_STORAGE_CONNECTION_STRING": "your-storage-connection-string",
     "AZURE_STORAGE_CONTAINER_NAME": "your-container-name",
+    "CHAT_UPLOAD_STORAGE_CONNECTION_STRING": "your-separate-chat-upload-storage-connection-string",
     "AZURE_SEARCH_ENDPOINT": "https://your-search.search.windows.net",
     "AZURE_SEARCH_INDEX_NAME": "your-search-index",
     "AZURE_SEARCH_ADMIN_KEY": "your-search-admin-key",
