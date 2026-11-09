@@ -5,7 +5,7 @@
   "main": "src/functions/*.js",
   "scripts": {
     "start": "func start",
-    "validate": "node --check src/functions/customSkillProcessor.js && node --check src/functions/purgeManager.js && node --check src/functions/scheduledPurge.js && node --check src/functions/secretBroker.js && node --check src/functions/treePopulateWorker.js && node --check src/lib/sql.js && node --check src/lib/blobStorage.js && node --check src/lib/azureSearch.js && node --check src/lib/purgeService.js && node --check src/lib/keyVault.js && node --check src/lib/treePopulateGeneration.js && node --check src/lib/treePopulateJob.js"
+    "validate": "node --check src/functions/customSkillProcessor.js && node --check src/functions/purgeManager.js && node --check src/functions/scheduledPurge.js && node --check src/functions/secretBroker.js && node --check src/functions/treePopulateWorker.js && node --check src/functions/chatUploadCleanup.js && node --check src/functions/processUploadWorker.js && node --check src/lib/sql.js && node --check src/lib/blobStorage.js && node --check src/lib/azureSearch.js && node --check src/lib/purgeService.js && node --check src/lib/keyVault.js && node --check src/lib/treePopulateGeneration.js && node --check src/lib/treePopulateJob.js && node --check src/lib/chatUploadCleanup.js && node --check src/lib/chatUploadJob.js && node --check src/lib/chatUploadProcessing.js"
   },
   "engines": {
     "node": "20.x"
