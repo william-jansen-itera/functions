@@ -52,22 +52,30 @@ test('extracts only the owner and application filtered text and bounds its lengt
 test('rejects empty or oversized notes and labels partial extraction', async () => {
   assert.match(await generateTemporaryNote({ fileName: 'file.txt', text: 'data', partial: true }), /^Partial extraction:/);
   noteText = ' ';
-  await assert.rejects(generateTemporaryNote({ fileName: 'file.txt', text: 'data', partial: false }), /valid short/);
+  await assert.rejects(generateTemporaryNote({ fileName: 'file.txt', text: 'data'.repeat(251), partial: false }), /valid short/);
   noteText = 'a'.repeat(1001);
-  await assert.rejects(generateTemporaryNote({ fileName: 'file.txt', text: 'data', partial: false }), /valid short/);
+  await assert.rejects(generateTemporaryNote({ fileName: 'file.txt', text: 'data'.repeat(251), partial: false }), /valid short/);
 });
 
-test('asks the model to preserve short source text and condense only long text', async () => {
-  await generateTemporaryNote({ fileName: 'example.txt', text: 'A worked geometry example', partial: false });
-  assert.match(noteRequest.input[0].content, /preserve its content, language, wording, and distinctive details/);
-  assert.match(noteRequest.input[0].content, /If the text is too long, condense it/);
+test('preserves short readable source text instead of accepting a model paraphrase', async () => {
+  const text = 'The triangle has a base of 6 cm and a height of 4 cm. Its area is 12 cm². The prism is 10 cm long, so its volume is 120 cm³.';
+  assert.equal(await generateTemporaryNote({ fileName: 'geometry.pdf', text, partial: false }), text);
+  assert.equal(await generateTemporaryNote({ fileName: 'geometry.pdf', text: 'Rumfang af trekantet prisme', partial: false }), 'Rumfang af trekantet prisme');
+  assert.equal(await generateTemporaryNote({ fileName: 'geometry.txt', text: 'x'.repeat(1000), partial: false }), 'x'.repeat(1000));
+  assert.equal(noteRequest, undefined);
+});
+
+test('asks the model to preserve the original language when condensing long text', async () => {
+  await generateTemporaryNote({ fileName: 'example.txt', text: 'A worked geometry example'.repeat(50), partial: false });
+  assert.match(noteRequest.input[0].content, /Keep the original language for all output; never translate/);
+  assert.match(noteRequest.input[0].content, /If the text is too long, condense it in the original language/);
   assert.deepEqual(JSON.parse(noteRequest.input[1].content), {
-    fileName: 'example.txt', partial: false, extractedText: 'A worked geometry example',
+    fileName: 'example.txt', partial: false, extractedText: 'A worked geometry example'.repeat(50),
   });
 });
 
 test('asks the model to interpret fragmented OCR without inventing chart relationships', async () => {
-  const text = 'Nearer-term economy (5x total growth, 2x human output) 8.0% Primary 30.0% Secondary 61.0% Tertiary';
+  const text = 'Nearer-term economy (5x total growth, 2x human output). 8.0% Primary 30.0% Secondary 61.0% Tertiary';
   await generateTemporaryNote({ fileName: 'chart.png', text, partial: false });
   assert.match(noteRequest.input[0].content, /fragmented OCR from a chart or image/);
   assert.match(noteRequest.input[0].content, /without copying OCR noise or guessing which figures belong to which labels/);
