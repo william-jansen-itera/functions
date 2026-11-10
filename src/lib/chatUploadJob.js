@@ -46,13 +46,14 @@ async function renewUpload(uploadId, token) {
   if (result.rowsAffected[0] !== 1) throw new Error('Chat upload lease was lost.');
 }
 
-async function finishUpload(uploadId, token, note) {
+async function finishUpload(uploadId, token, note, caption) {
   const result = await withSqlConnection(() => new sql.Request()
     .input('id', sql.UniqueIdentifier, uploadId)
     .input('token', sql.UniqueIdentifier, token)
     .input('note', sql.NVarChar(1000), note)
+    .input('caption', sql.NVarChar(2000), caption)
     .query(`
-      UPDATE dbo.chat_uploads SET status = N'succeeded', note = @note,
+      UPDATE dbo.chat_uploads SET status = N'succeeded', note = @note, caption = @caption,
         lease_until = NULL, updated_at = SYSUTCDATETIME()
       WHERE id = @id AND attempt_token = @token AND status = N'running'
         AND expires_at > SYSUTCDATETIME();

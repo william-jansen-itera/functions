@@ -22,12 +22,14 @@ async function waitForIndexedUpload({ uploadId, ownerObjectId, onProgress }) {
   while (Date.now() < deadline) {
     await onProgress();
     const found = await searchRequest(`${endpoint}/indexes/${encodeURIComponent(index)}/docs/search?api-version=2024-07-01`, key, {
-      search: '*', filter, select: 'content,ocrText', top: 2,
+      search: '*', filter, select: 'content,ocrText,imageDescriptionFiltered', top: 2,
     });
     const document = found.value?.[0];
     if (document) {
       const source = [document.content, ...(document.ocrText || [])].map((text) => String(text ?? '').trim()).filter(Boolean).join('\n');
-      if (source) return { text: source.slice(0, MAX_SOURCE_CHARS), partial: source.length > MAX_SOURCE_CHARS };
+      const captions = (document.imageDescriptionFiltered || []).map((text) => String(text ?? '').trim()).filter(Boolean);
+      const text = source || captions.join('\n');
+      if (text) return { text: text.slice(0, MAX_SOURCE_CHARS), partial: text.length > MAX_SOURCE_CHARS, captions };
     }
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }

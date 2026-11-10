@@ -18,13 +18,15 @@ app.storageQueue('processUploadWorker', {
     }, 20_000);
 
     try {
-      const { text, partial } = await waitForIndexedUpload({
+      const { text, partial, captions = [] } = await waitForIndexedUpload({
         uploadId, ownerObjectId: upload.ownerObjectId,
         onProgress: () => renewUpload(uploadId, upload.attemptToken),
       });
       const note = await generateTemporaryNote({ fileName: upload.fileName, text, partial });
+      const joinedCaptions = captions.join('\n');
+      const caption = joinedCaptions ? joinedCaptions.slice(0, 2000).trimEnd() : null;
       await stopIndexingAndDeleteDocument(upload.blobName, uploadId);
-      await finishUpload(uploadId, upload.attemptToken, note);
+      await finishUpload(uploadId, upload.attemptToken, note, caption);
       context.log(`Processed temporary chat upload ${uploadId}.`);
     } catch (error) {
       context.error(`Temporary chat upload ${uploadId} failed.`, error);

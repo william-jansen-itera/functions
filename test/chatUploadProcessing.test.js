@@ -49,6 +49,19 @@ test('extracts only the owner and application filtered text and bounds its lengt
   assert.equal(searches[1].filter, "uploadId eq 'upload' and ownerObjectId eq 'owner''quoted' and appIdentifier eq 'app'");
 });
 
+test('returns filtered captions separately while preserving text and OCR for the note', async () => {
+  searchResult = { value: [{ content: 'Contract text', ocrText: ['Scanned clause'], imageDescriptionFiltered: ['A signed document', ' '] }] };
+  const extraction = await waitForIndexedUpload({ uploadId: 'upload', ownerObjectId: 'owner', onProgress: async () => {} });
+  assert.deepEqual(extraction, { text: 'Contract text\nScanned clause', partial: false, captions: ['A signed document'] });
+  assert.equal(searches[0].select, 'content,ocrText,imageDescriptionFiltered');
+});
+
+test('uses filtered captions as fallback for an image with no readable text', async () => {
+  searchResult = { value: [{ content: '', ocrText: [], imageDescriptionFiltered: ['An aerial view of a harbor'] }] };
+  const extraction = await waitForIndexedUpload({ uploadId: 'upload', ownerObjectId: 'owner', onProgress: async () => {} });
+  assert.deepEqual(extraction, { text: 'An aerial view of a harbor', partial: false, captions: ['An aerial view of a harbor'] });
+});
+
 test('rejects empty or oversized notes and labels partial extraction', async () => {
   assert.match(await generateTemporaryNote({ fileName: 'file.txt', text: 'data', partial: true }), /^Partial extraction:/);
   noteText = ' ';

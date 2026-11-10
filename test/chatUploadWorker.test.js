@@ -5,6 +5,7 @@ let handler;
 let queueConnection;
 let claimedUpload;
 let extractionError;
+let extractedCaptions;
 const calls = [];
 
 const jobPath = require.resolve('../src/lib/chatUploadJob');
@@ -20,7 +21,7 @@ require.cache[processingPath] = { id: processingPath, filename: processingPath, 
   waitForIndexedUpload: async () => {
     calls.push('extract');
     if (extractionError) throw extractionError;
-    return { text: 'Readable content', partial: false };
+    return { text: 'Readable content', partial: false, captions: extractedCaptions };
   },
   generateTemporaryNote: async () => { calls.push('note'); return 'Temporary note'; },
   stopIndexingAndDeleteDocument: async () => { calls.push('deleteSearch'); },
@@ -40,12 +41,27 @@ test('listens on the separate chat upload storage account', () => {
 test.beforeEach(() => {
   calls.length = 0;
   extractionError = null;
+  extractedCaptions = [];
   claimedUpload = { attemptToken: 'token', ownerObjectId: 'owner', fileName: 'file.txt', blobName: 'file' };
 });
 
 test('finishes only after temporary Search document deletion', async () => {
   await handler({ uploadId }, context);
-  assert.deepEqual(calls, ['extract', 'note', 'deleteSearch', ['finish', uploadId, 'token', 'Temporary note']]);
+  assert.deepEqual(calls, ['extract', 'note', 'deleteSearch', ['finish', uploadId, 'token', 'Temporary note', null]]);
+});
+
+test('saves image captions alongside the note in source order', async () => {
+  extractedCaptions = ['A chart showing trends', 'A map showing locations'];
+  await handler({ uploadId }, context);
+  assert.deepEqual(calls, ['extract', 'note', 'deleteSearch',
+    ['finish', uploadId, 'token', 'Temporary note', 'A chart showing trends\nA map showing locations']]);
+});
+
+test('bounds stored captions without changing the note', async () => {
+  extractedCaptions = ['A'.repeat(2100)];
+  await handler({ uploadId }, context);
+  assert.equal(calls.at(-1)[3], 'Temporary note');
+  assert.equal(calls.at(-1)[4].length, 2000);
 });
 
 test('releases failed extraction for retry and rethrows', async () => {
