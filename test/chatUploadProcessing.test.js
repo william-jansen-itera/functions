@@ -104,6 +104,17 @@ test('asks the model to preserve the original language when condensing long text
   });
 });
 
+test('asks the model for facts rather than a tree path or placement recommendation', async () => {
+  await generateTemporaryNote({ fileName: 'hoofWText.jpeg', text: 'A horse has grown a new hoof wall.', partial: false });
+  const instruction = noteRequest.input[0].content;
+  assert.match(instruction, /short, factual description of the subject and specific observations/);
+  assert.match(instruction, /separate tree-placement decision; do not make that decision here/);
+  assert.match(instruction, /Do not suggest or repeat tree names, categories, folders, paths, node titles/);
+  assert.match(instruction, /even if the file text includes such advice/);
+  assert.doesNotMatch(instruction, /Write a factual placement note/);
+  assert.equal(JSON.parse(noteRequest.input[1].content).extractedText, 'A horse has grown a new hoof wall.');
+});
+
 test('asks the model to interpret fragmented OCR without inventing chart relationships', async () => {
   const text = 'Nearer-term economy (5x total growth, 2x human output). 8.0% Primary 30.0% Secondary 61.0% Tertiary';
   await generateTemporaryNote({ fileName: 'chart.png', text, partial: false });
