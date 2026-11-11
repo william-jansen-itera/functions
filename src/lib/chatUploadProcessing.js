@@ -5,6 +5,14 @@ const { deleteSearchUpload, getSearchConfig, getStagingContainer, searchRequest 
 
 const MAX_SOURCE_CHARS = 12000;
 
+function classifyUpload({ fileName, sourceText, incomplete = false }) {
+  const text = String(sourceText ?? '');
+  if (!/\.(?:png|jpe?g)$/i.test(fileName) && !incomplete && text.trim() && text.length <= 4000) {
+    return { saveKind: 'note', extractedNoteText: text };
+  }
+  return { saveKind: 'attachment', extractedNoteText: null };
+}
+
 async function waitForIndexedUpload({ uploadId, ownerObjectId, onProgress }) {
   const { endpoint, index, key } = getSearchConfig();
   const indexer = process.env.CHAT_UPLOAD_SEARCH_INDEXER_NAME;
@@ -19,6 +27,7 @@ async function waitForIndexedUpload({ uploadId, ownerObjectId, onProgress }) {
 
   const filter = `uploadId eq '${uploadId}' and ownerObjectId eq '${ownerObjectId.replaceAll("'", "''")}' and appIdentifier eq '${getRequiredApplicationIdentifier().replaceAll("'", "''")}'`;
   const deadline = Date.now() + 150_000;
+  let indexedDocument = false;
   while (Date.now() < deadline) {
     await onProgress();
     const found = await searchRequest(`${endpoint}/indexes/${encodeURIComponent(index)}/docs/search?api-version=2024-07-01`, key, {
@@ -26,13 +35,15 @@ async function waitForIndexedUpload({ uploadId, ownerObjectId, onProgress }) {
     });
     const document = found.value?.[0];
     if (document) {
-      const source = [document.content, ...(document.ocrText || [])].map((text) => String(text ?? '').trim()).filter(Boolean).join('\n');
+      indexedDocument = true;
+      const source = [document.content, ...(document.ocrText || [])].map((text) => String(text ?? '')).filter((text) => text.trim()).join('\n');
       const captions = (document.imageDescriptionFiltered || []).map((text) => String(text ?? '').trim()).filter(Boolean);
       const text = source || captions.join('\n');
-      if (text) return { text: text.slice(0, MAX_SOURCE_CHARS), partial: text.length > MAX_SOURCE_CHARS, captions };
+      if (text) return { text: text.slice(0, MAX_SOURCE_CHARS), sourceText: source, partial: text.length > MAX_SOURCE_CHARS, captions };
     }
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
+  if (indexedDocument) return { text: '', sourceText: '', partial: false, captions: [] };
   throw new Error('Upload extraction timed out or produced no readable text.');
 }
 
@@ -82,4 +93,4 @@ async function stopIndexingAndDeleteDocument(blobName, uploadId) {
   await deleteSearchUpload(uploadId);
 }
 
-module.exports = { waitForIndexedUpload, generateTemporaryNote, stopIndexingAndDeleteDocument };
+module.exports = { classifyUpload, waitForIndexedUpload, generateTemporaryNote, stopIndexingAndDeleteDocument };

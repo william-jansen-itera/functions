@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
-const { claimUpload, renewUpload, finishUpload, releaseUpload } = require('../lib/chatUploadJob');
-const { waitForIndexedUpload, generateTemporaryNote, stopIndexingAndDeleteDocument } = require('../lib/chatUploadProcessing');
+const { claimUpload, renewUpload, completeChatUploadProcessing, releaseUpload } = require('../lib/chatUploadJob');
+const { classifyUpload, waitForIndexedUpload, generateTemporaryNote, stopIndexingAndDeleteDocument } = require('../lib/chatUploadProcessing');
 
 app.storageQueue('processUploadWorker', {
   queueName: 'chat-upload-jobs',
@@ -18,15 +18,16 @@ app.storageQueue('processUploadWorker', {
     }, 20_000);
 
     try {
-      const { text, partial, captions = [] } = await waitForIndexedUpload({
+      const { text, sourceText, partial, captions = [] } = await waitForIndexedUpload({
         uploadId, ownerObjectId: upload.ownerObjectId,
         onProgress: () => renewUpload(uploadId, upload.attemptToken),
       });
-      const note = await generateTemporaryNote({ fileName: upload.fileName, text, partial });
+      const classification = classifyUpload({ fileName: upload.fileName, sourceText, incomplete: partial });
+      const note = text ? await generateTemporaryNote({ fileName: upload.fileName, text, partial }) : null;
       const joinedCaptions = captions.join('\n');
       const caption = joinedCaptions ? joinedCaptions.slice(0, 2000).trimEnd() : null;
       await stopIndexingAndDeleteDocument(upload.blobName, uploadId);
-      await finishUpload(uploadId, upload.attemptToken, note, caption);
+      await completeChatUploadProcessing(uploadId, upload.attemptToken, { note, caption, ...classification });
       context.log(`Processed temporary chat upload ${uploadId}.`);
     } catch (error) {
       context.error(`Temporary chat upload ${uploadId} failed.`, error);

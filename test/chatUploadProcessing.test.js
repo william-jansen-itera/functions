@@ -26,7 +26,22 @@ mockModule('../src/lib/chatUploadCleanup', {
   deleteSearchUpload: async (id) => searches.push(['delete', id]),
 });
 
-const { waitForIndexedUpload, generateTemporaryNote, stopIndexingAndDeleteDocument } = require('../src/lib/chatUploadProcessing');
+const { classifyUpload, waitForIndexedUpload, generateTemporaryNote, stopIndexingAndDeleteDocument } = require('../src/lib/chatUploadProcessing');
+
+test('classifies complete extracted source independently of captions and placement notes', () => {
+  for (const length of [3999, 4000]) {
+    assert.deepEqual(classifyUpload({ fileName: 'file.pdf', sourceText: 'x'.repeat(length) }),
+      { saveKind: 'note', extractedNoteText: 'x'.repeat(length) });
+  }
+  assert.deepEqual(classifyUpload({ fileName: 'file.pdf', sourceText: 'x'.repeat(4001) }),
+    { saveKind: 'attachment', extractedNoteText: null });
+  assert.deepEqual(classifyUpload({ fileName: 'photo.jpg', sourceText: 'x'.repeat(100) }),
+    { saveKind: 'attachment', extractedNoteText: null });
+  assert.deepEqual(classifyUpload({ fileName: 'file.pdf', sourceText: 'short', incomplete: true }),
+    { saveKind: 'attachment', extractedNoteText: null });
+  assert.deepEqual(classifyUpload({ fileName: 'file.pdf', sourceText: '' }),
+    { saveKind: 'attachment', extractedNoteText: null });
+});
 
 test.beforeEach(() => {
   searches.length = 0;
@@ -46,20 +61,21 @@ test('extracts only the owner and application filtered text and bounds its lengt
   });
   assert.equal(extraction.text.length, 12000);
   assert.equal(extraction.partial, true);
+  assert.equal(extraction.sourceText.length, 12009);
   assert.equal(searches[1].filter, "uploadId eq 'upload' and ownerObjectId eq 'owner''quoted' and appIdentifier eq 'app'");
 });
 
 test('returns filtered captions separately while preserving text and OCR for the note', async () => {
   searchResult = { value: [{ content: 'Contract text', ocrText: ['Scanned clause'], imageDescriptionFiltered: ['A signed document', ' '] }] };
   const extraction = await waitForIndexedUpload({ uploadId: 'upload', ownerObjectId: 'owner', onProgress: async () => {} });
-  assert.deepEqual(extraction, { text: 'Contract text\nScanned clause', partial: false, captions: ['A signed document'] });
+  assert.deepEqual(extraction, { text: 'Contract text\nScanned clause', sourceText: 'Contract text\nScanned clause', partial: false, captions: ['A signed document'] });
   assert.equal(searches[0].select, 'content,ocrText,imageDescriptionFiltered');
 });
 
 test('uses filtered captions as fallback for an image with no readable text', async () => {
   searchResult = { value: [{ content: '', ocrText: [], imageDescriptionFiltered: ['An aerial view of a harbor'] }] };
   const extraction = await waitForIndexedUpload({ uploadId: 'upload', ownerObjectId: 'owner', onProgress: async () => {} });
-  assert.deepEqual(extraction, { text: 'An aerial view of a harbor', partial: false, captions: ['An aerial view of a harbor'] });
+  assert.deepEqual(extraction, { text: 'An aerial view of a harbor', sourceText: '', partial: false, captions: ['An aerial view of a harbor'] });
 });
 
 test('rejects empty or oversized notes and labels partial extraction', async () => {
@@ -99,4 +115,10 @@ test('asks the model to interpret fragmented OCR without inventing chart relatio
 test('marks source blob to skip indexing before deleting its Search document', async () => {
   await stopIndexingAndDeleteDocument('blob', 'upload');
   assert.deepEqual(searches, [{ uploadid: 'id', azuresearch_skip: 'true' }, ['delete', 'upload']]);
+});
+
+test('classification preserves original whitespace in a complete extracted document', () => {
+  assert.deepEqual(classifyUpload({ fileName: 'file.txt', sourceText: ' First line\n  second line\n' }), {
+    saveKind: 'note', extractedNoteText: ' First line\n  second line\n',
+  });
 });

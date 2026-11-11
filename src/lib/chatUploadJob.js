@@ -46,14 +46,22 @@ async function renewUpload(uploadId, token) {
   if (result.rowsAffected[0] !== 1) throw new Error('Chat upload lease was lost.');
 }
 
-async function finishUpload(uploadId, token, note, caption) {
+async function completeChatUploadProcessing(uploadId, token, { note, caption, saveKind, extractedNoteText }) {
+  if (!['note', 'attachment'].includes(saveKind) ||
+      (saveKind === 'note' && (!extractedNoteText || extractedNoteText.length > 4000)) ||
+      (saveKind === 'attachment' && extractedNoteText != null)) {
+    throw new Error('Invalid chat upload save classification.');
+  }
   const result = await withSqlConnection(() => new sql.Request()
     .input('id', sql.UniqueIdentifier, uploadId)
     .input('token', sql.UniqueIdentifier, token)
     .input('note', sql.NVarChar(1000), note)
     .input('caption', sql.NVarChar(2000), caption)
+    .input('save_kind', sql.NVarChar(20), saveKind)
+    .input('extracted_note_text', sql.NVarChar(4000), extractedNoteText)
     .query(`
       UPDATE dbo.chat_uploads SET status = N'succeeded', note = @note, caption = @caption,
+        save_kind = @save_kind, extracted_note_text = @extracted_note_text,
         lease_until = NULL, updated_at = SYSUTCDATETIME()
       WHERE id = @id AND attempt_token = @token AND status = N'running'
         AND expires_at > SYSUTCDATETIME();
@@ -74,4 +82,4 @@ async function releaseUpload(uploadId, token, { failed = false, reason = null } 
     `));
 }
 
-module.exports = { claimUpload, renewUpload, finishUpload, releaseUpload };
+module.exports = { claimUpload, renewUpload, completeChatUploadProcessing, releaseUpload };
