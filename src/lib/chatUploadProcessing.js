@@ -81,9 +81,7 @@ async function generateTemporaryNote({ fileName, text, partial }) {
   });
   const note = String(result?.output_text ?? '').trim();
   if (!note || note.length > 1000) throw new Error('Foundry did not return a valid short placement note.');
-  const labeledNote = partial ? `Partial extraction: ${note}` : note;
-  if (labeledNote.length > 1000) throw new Error('Temporary placement note exceeds the length limit.');
-  return labeledNote;
+  return note;
 }
 
 async function stopIndexingAndDeleteDocument(blobName, uploadId) {

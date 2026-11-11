@@ -78,8 +78,9 @@ test('uses filtered captions as fallback for an image with no readable text', as
   assert.deepEqual(extraction, { text: 'An aerial view of a harbor', sourceText: '', partial: false, captions: ['An aerial view of a harbor'] });
 });
 
-test('rejects empty or oversized notes and labels partial extraction', async () => {
-  assert.match(await generateTemporaryNote({ fileName: 'file.txt', text: 'data', partial: true }), /^Partial extraction:/);
+test('rejects empty or oversized notes and leaves partial-extraction wording to the model', async () => {
+  assert.equal(await generateTemporaryNote({ fileName: 'file.txt', text: 'data', partial: true }), noteText);
+  assert.match(noteRequest.input[0].content, /If extraction is partial, say so/);
   noteText = ' ';
   await assert.rejects(generateTemporaryNote({ fileName: 'file.txt', text: 'data'.repeat(251), partial: false }), /valid short/);
   noteText = 'a'.repeat(1001);
