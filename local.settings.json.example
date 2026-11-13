@@ -3,7 +3,7 @@
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "node",
-    "CUSTOM_SKILL_CONFIDENCE_THRESHOLD": "0.6",
+    "CUSTOM_SKILL_CONFIDENCE_THRESHOLD": "0.4",
     "PURGE_JOB_SCHEDULE": "0 0 16 * * *",
     "APPLICATION_IDENTIFIER": "your-application-identifier",
     "AZURE_SQL_USER": "your-sql-user",

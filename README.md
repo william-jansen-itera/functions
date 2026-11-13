@@ -6,7 +6,7 @@ It also owns sensitive backend operations for the application: a timer-triggered
 
 ## Temporary chat upload cleanup
 
-The separate `chatUploadCleanup` timer checks for expired staged uploads once daily at midnight UTC and deletes their blobs from the dedicated staging account, their documents from the temporary Search index, and their SQL rows. Uploads expire after 24 hours, but deletion waits until the next cleanup run. A failed cleanup retains the SQL row for retry. Confirmed tree attachments live in permanent tree storage and are not deleted by this staging cleanup. It does not share retention settings or storage with `scheduledPurge`. Configure `CHAT_UPLOAD_STORAGE_CONNECTION_STRING`, `CHAT_UPLOAD_CONTAINER_NAME`, `CHAT_UPLOAD_SEARCH_INDEX_NAME`, `CHAT_UPLOAD_SEARCH_INDEXER_NAME`, `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_ADMIN_KEY`, `AZURE_AI_PROJECT_ENDPOINT`, and `AZURE_AI_MODEL_DEPLOYMENT_NAME`; provision the private container, index, indexer, and SQL table described in `frontend/azure-search/README.md` before deploying. Apply `frontend/azure-sql/chat-uploads-save-kind.sql` to existing databases before deploying either the updated worker or frontend; it does not guess classifications for older completed rows. The `processUploadWorker` reads job IDs from `chat-upload-jobs` in the separate staging storage account, extracts text through Search, classifies complete non-image text of at most 4,000 characters as verbatim note content, and classifies images, longer or unreadable files as attachments. It stores classification and short extracted text separately from the placement note and caption before deleting the temporary Search document. Configure the same `CHAT_UPLOAD_STORAGE_CONNECTION_STRING` on the frontend and Function App; the queue trigger requires this setting even if blob access also uses `CHAT_UPLOAD_STORAGE_ACCOUNT_URL`. Keep `AzureWebJobsStorage` pointed at the existing host/tree queue account.
+The temporary chat upload Search document has two deletion points. On successful processing, `processUploadWorker` marks the staging blob to skip indexing and deletes the document immediately after extraction and note generation, before marking the SQL upload as succeeded. As a fallback, the separate `chatUploadCleanup` timer runs daily at midnight UTC and deletes any remaining Search document for an expired upload along with its staging blob and SQL row. Uploads expire after 24 hours, but fallback deletion waits until the next cleanup run. A failed cleanup retains the SQL row for retry. Confirmed tree attachments live in permanent tree storage and are not deleted by this staging cleanup. It does not share retention settings or storage with `scheduledPurge`. Configure `CHAT_UPLOAD_STORAGE_CONNECTION_STRING`, `CHAT_UPLOAD_CONTAINER_NAME`, `CHAT_UPLOAD_SEARCH_INDEX_NAME`, `CHAT_UPLOAD_SEARCH_INDEXER_NAME`, `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_ADMIN_KEY`, `AZURE_AI_PROJECT_ENDPOINT`, and `AZURE_AI_MODEL_DEPLOYMENT_NAME`; provision the private container, index, indexer, and SQL table described in `frontend/azure-search/README.md` before deploying. Apply `frontend/azure-sql/chat-uploads-save-kind.sql` to existing databases before deploying either the updated worker or frontend; it does not guess classifications for older completed rows. The `processUploadWorker` reads job IDs from `chat-upload-jobs` in the separate staging storage account, extracts text through Search, classifies complete non-image text of at most 4,000 characters as verbatim note content, and classifies images, longer or unreadable files as attachments. It stores classification and short extracted text separately from the placement note and caption after deleting the temporary Search document. Configure the same `CHAT_UPLOAD_STORAGE_CONNECTION_STRING` on the frontend and Function App; the queue trigger requires this setting even if blob access also uses `CHAT_UPLOAD_STORAGE_ACCOUNT_URL`. Keep `AzureWebJobsStorage` pointed at the existing host/tree queue account.
 
 ## Tree Populate worker
 
@@ -23,7 +23,7 @@ Apply the forward-only `frontend/azure-sql/tree-jobs.sql` migration before deplo
 1. Install dependencies:
    `npm ci`
 2. Copy `local.settings.json.example` to `local.settings.json`.
-3. Set `CUSTOM_SKILL_CONFIDENCE_THRESHOLD` if you want a value other than `0.6`.
+3. Set `CUSTOM_SKILL_CONFIDENCE_THRESHOLD` if you want a value other than `0.4`.
 4. Set the SQL, Blob Storage, Azure Search, Key Vault, and `APPLICATION_IDENTIFIER` values required by purge execution and secret brokering.
 5. Optionally adjust `PURGE_JOB_SCHEDULE` if you do not want the default daily `16:00 UTC` run.
 6. Start the function locally:
@@ -120,7 +120,7 @@ The function expects the Azure AI Search custom skill payload shape. The generic
       "recordId": "0",
       "data": {
         "textValues": ["a horse hoof", "a cat wearing a hat"],
-        "confidenceValues": [0.91, 0.41]
+        "confidenceValues": [0.91, 0.39]
       }
     }
   ]
@@ -140,7 +140,7 @@ It returns only the accepted values in `filteredValues`:
       "errors": null,
       "warnings": [
         {
-          "message": "Discarded 1 value below confidence threshold 0.6."
+          "message": "Discarded 1 value below confidence threshold 0.4."
         }
       ]
     }
