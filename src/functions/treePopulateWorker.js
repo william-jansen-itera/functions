@@ -38,7 +38,7 @@ app.storageQueue('treePopulateWorker', {
 });
 
 app.timer('treePopulateRecovery', {
-  schedule: '0 */15 * * * *',
+  schedule: '0 0 16 * * *',
   handler: async (_timer, context) => {
     const result = await withSqlConnection(async () => new sql.Request()
       .input('application_identifier', sql.NVarChar(100), getRequiredApplicationIdentifier())
