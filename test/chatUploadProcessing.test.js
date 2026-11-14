@@ -104,6 +104,20 @@ test('asks the model to preserve the original language when condensing long text
   });
 });
 
+test('GPT-5.4 temporary notes use medium reasoning while GPT-4.1 keeps the same prompt without an override', async () => {
+  const requests = [];
+  for (const model of ['gpt-4.1', 'gpt-5.4']) {
+    process.env.AZURE_AI_MODEL_DEPLOYMENT_NAME = model;
+    await generateTemporaryNote({ fileName: 'fish.jpg', text: 'a green fish in water', partial: false });
+    assert.equal(noteRequest.model, model);
+    if (model === 'gpt-5.4') assert.deepEqual(noteRequest.reasoning, { effort: 'medium' });
+    else assert.ok(!Object.hasOwn(noteRequest, 'reasoning'));
+    const { model: requestedModel, reasoning, ...rest } = noteRequest;
+    requests.push(rest);
+  }
+  assert.deepEqual(requests[0], requests[1]);
+});
+
 test('asks the model for facts rather than a tree path or placement recommendation', async () => {
   await generateTemporaryNote({ fileName: 'hoofWText.jpeg', text: 'A horse has grown a new hoof wall.', partial: false });
   const instruction = noteRequest.input[0].content;

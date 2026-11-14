@@ -16,6 +16,8 @@ Working hypothesis for overlapping Populate jobs on different trees: the Functio
 
 For Foundry model calls in Azure, enable the Function App's system-assigned managed identity and grant that identity the **Foundry User** role (formerly **Azure AI User**) on the Foundry resource hosting the configured project and model. The worker's `DefaultAzureCredential` uses this identity when no service-principal credential trio (`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`) is configured on the Function App; do not copy the Static Web App's credentials to the Function App. Allow time for role assignments to propagate before testing Populate.
 
+When `AZURE_AI_MODEL_DEPLOYMENT_NAME` is exactly `gpt-5.4`, upload-note and tree-population model calls explicitly use `reasoning.effort=medium`. Other deployment names receive no reasoning override. This requires deploying the updated Function code, not another application setting.
+
 Apply the forward-only `frontend/azure-sql/tree-jobs.sql` migration before deploying the worker, then deploy/configure the Function App before enabling the updated frontend. Do not run that migration automatically against production. The Consumption plan's `functionTimeout` is configured to 10 minutes; measure worst-case generation time before rollout. Jobs that cannot finish within that limit require a checkpointed design. The recovery timer fails abandoned Populate jobs; retain job history only as long as needed for support and remove expired completed/failed records through the established retention process.
 
 ## Local setup

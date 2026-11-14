@@ -127,6 +127,7 @@ async function generateTreeNodesFromDescription(tree, onProgress = async () => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const response = await responses.create({
         model, input: [{ type: 'message', role: 'system', content: prompt }],
+        ...(model === 'gpt-5.4' ? { reasoning: { effort: 'medium' } } : {}),
         text: { verbosity: 'medium', format: { type: 'json_schema', name: schemaName, strict: true, schema } },
       });
       try {

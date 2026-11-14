@@ -59,6 +59,7 @@ async function generateTemporaryNote({ fileName, text, partial }) {
   const responses = new AIProjectClient(endpoint, new DefaultAzureCredential()).getOpenAIClient().responses;
   const result = await responses.create({
     model,
+    ...(model === 'gpt-5.4' ? { reasoning: { effort: 'medium' } } : {}),
     input: [
       {
         type: 'message',
