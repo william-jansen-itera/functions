@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 
-const DEFAULT_THRESHOLD = 0.4;
+const DEFAULT_THRESHOLD = 0.35;
 
 function toArray(value) {
   if (Array.isArray(value)) {

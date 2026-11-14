@@ -23,7 +23,7 @@ Apply the forward-only `frontend/azure-sql/tree-jobs.sql` migration before deplo
 1. Install dependencies:
    `npm ci`
 2. Copy `local.settings.json.example` to `local.settings.json`.
-3. Set `CUSTOM_SKILL_CONFIDENCE_THRESHOLD` if you want a value other than `0.4`.
+3. Set `CUSTOM_SKILL_CONFIDENCE_THRESHOLD` if you want a value other than `0.35`. Existing local or Azure app settings override this default.
 4. Set the SQL, Blob Storage, Azure Search, Key Vault, and `APPLICATION_IDENTIFIER` values required by purge execution and secret brokering.
 5. Optionally adjust `PURGE_JOB_SCHEDULE` if you do not want the default daily `16:00 UTC` run.
 6. Start the function locally:
@@ -120,7 +120,7 @@ The function expects the Azure AI Search custom skill payload shape. The generic
       "recordId": "0",
       "data": {
         "textValues": ["a horse hoof", "a cat wearing a hat"],
-        "confidenceValues": [0.91, 0.39]
+        "confidenceValues": [0.91, 0.34]
       }
     }
   ]
@@ -140,7 +140,7 @@ It returns only the accepted values in `filteredValues`:
       "errors": null,
       "warnings": [
         {
-          "message": "Discarded 1 value below confidence threshold 0.4."
+          "message": "Discarded 1 value below confidence threshold 0.35."
         }
       ]
     }
